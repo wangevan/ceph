@@ -125,7 +125,6 @@ class Monitor;
 class MMonPaxos;
 class Paxos;
 
-
 // i am one state machine.
 /**
  * This libary is based on the Paxos algorithm, but varies in a few key ways:
@@ -175,6 +174,10 @@ public:
    * Leader/Peon is updating to a new value.
    */
   const static int STATE_UPDATING   = 3;
+  /**
+   * Leader is about to propose a new value, but hasn't gotten to do it yet.
+   */
+  const static int STATE_WARMING_UP = 4;
  
   /**
    * Obtain state name from constant value.
@@ -190,6 +193,7 @@ public:
     case STATE_RECOVERING: return "recovering";
     case STATE_ACTIVE: return "active";
     case STATE_UPDATING: return "updating";
+    case STATE_WARMING_UP: return "warming-up";
     default: assert(0); return 0;
     }
   }
@@ -495,8 +499,13 @@ private:
    */
   list<Context*> waiting_for_commit;
   /**
+   *
+   */
+  list<Context*> proposals;
+  /**
    * @}
    */
+  Mutex proposals_lock;
 
   /**
    * @defgroup Paxos_h_sync_warns Synchronization warnings
@@ -573,6 +582,30 @@ private:
       paxos->lease_renew_timeout();
     }
   };
+
+  /**
+   *
+   */
+  class C_Proposal : public Context {
+    Context *proposer_context;
+  public:
+    bufferlist bl;
+    bool proposed;
+
+    C_Proposal(Context *c, bufferlist& proposal_bl) : 
+	proposer_context(c),
+	bl(proposal_bl),
+        proposed(false)
+      { }
+    
+    void finish(int r) {
+//      assert(proposer_context != NULL);
+      std::cout << __func__ << " finishing; proposer: " << proposer_context << std::endl;
+      if (proposer_context)
+        proposer_context->finish(r);
+    }
+  };
+
   /**
    * @}
    */
@@ -898,6 +931,8 @@ private:
    */
   void warn_on_future_time(utime_t t, entity_name_t from);
 
+  void finish_proposal();
+
 public:
   /**
    * @param m A monitor
@@ -918,6 +953,7 @@ public:
 		   lease_ack_timeout_event(0),
 		   lease_timeout_event(0),
 		   accept_timeout_event(0),
+		   proposals_lock("Paxos Proposals Lock"),
 		   clock_drift_warned(0) { }
 
   const string get_name() const {
