@@ -145,6 +145,13 @@ librados_config_SOURCES = librados-config.cc
 librados_config_LDADD = libglobal.la librados.la $(EXTRALIBS) $(CRYPTO_LIBS)
 bin_PROGRAMS += librados-config
 
+mon_store_tool_SOURCES = test/cli/mon-store-tool/mon-store-tool.cc os/LevelDBStore.cc
+mon_store_tool_LDFLAGS = ${AM_LDFLAGS}
+mon_store_tool_LDADD =  ${UNITTEST_STATIC_LDADD} $(LIBOS_LDA) $(LIBGLOBAL_LDA)
+mon_store_tool_CXXFLAGS = ${AM_CXXFLAGS} ${UNITTEST_CXXFLAGS} \
+	-I$(top_srcdir)/src/leveldb/include
+bin_DEBUGPROGRAMS += mon-store-tool
+
 # synthetic client
 ceph_syn_SOURCES = ceph_syn.cc client/SyntheticClient.cc
 ceph_syn_LDADD = libclient.la libosdc.la $(LIBGLOBAL_LDA)
