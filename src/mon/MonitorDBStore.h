@@ -90,7 +90,7 @@ class MonitorDBStore
       ops.push_back(Op(OP_ERASE, prefix, key));
     }
 
-    void erase(string prefix, vers)on_t ver) {
+    void erase(string prefix, version_t ver) {
       ostringstream os;
       os << ver;
       erase(prefix, os.str());
@@ -138,7 +138,7 @@ class MonitorDBStore
 	    f->dump_string("type", "PUT");
 	    f->dump_string("prefix", op.prefix);
 	    f->dump_string("key", op.key);
-	    ostream os;
+	    ostringstream os;
 	    op.bl.hexdump(os);
 	    f->dump_unsigned("length", op.bl.length());
 	    f->dump_string("bl", os.str());
