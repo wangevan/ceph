@@ -104,7 +104,8 @@ void PaxosService::propose_pending()
 {
   dout(10) << "propose_pending" << dendl;
   assert(have_pending);
-  assert(mon->is_leader() && is_active());
+  assert(mon->is_leader());
+  assert(is_active());
 
   if (proposal_timer) {
     mon->timer.cancel_event(proposal_timer);
@@ -124,7 +125,7 @@ void PaxosService::propose_pending()
   encode_pending(&t);
   have_pending = false;
 
-  JSONFormatter f;
+  JSONFormatter f(true);
   t.dump(&f);
   dout(20) << __func__ << " transaction dump:\n";
   f.flush(*_dout);
@@ -192,6 +193,12 @@ void PaxosService::_active()
       create_initial();
       propose_pending();
       return;
+    }
+  } else {
+    if (!mon->is_leader()) {
+      dout(7) << __func__ << " we are not the leader, hence we propose nothing!" << dendl;
+    } else if (!is_active()) {
+      dout(7) << __func__ << " we are not active, hence we propose nothing!" << dendl;
     }
   }
 
@@ -263,3 +270,25 @@ void PaxosService::trim_to(version_t first, bool force)
   put_first_committed(&t, first_committed);
   mon->store->apply_transaction(t);
 }
+
+PaxosService::C_Active::C_Active(PaxosService *s) : svc(s)
+{
+#undef dout_prefix
+#define dout_prefix _prefix(_dout, s->mon, s->paxos, s->service_name)
+  dout(10) << __func__ << " Creating active callback for " << s->get_service_name() << dendl;
+#undef dout_prefix
+#define dout_prefix _prefix(_dout, mon, paxos, service_name)
+}
+
+void PaxosService::C_Active::finish(int r)
+{
+  if (r >= 0) {
+#undef dout_prefix
+#define dout_prefix _prefix(_dout, svc->mon, svc->paxos, svc->service_name)
+    dout(10) << __func__ << " Going active for " << svc->get_service_name() << dendl;
+#undef dout_prefix
+#define dout_prefix _prefix(_dout, mon, paxos, service_name)
+    svc->_active();
+  }
+}
+
