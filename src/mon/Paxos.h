@@ -586,6 +586,7 @@ private:
   /**
    *
    */
+public:
   class C_Proposal : public Context {
     Context *proposer_context;
   public:
@@ -605,11 +606,10 @@ private:
         proposer_context->finish(r);
     }
   };
-
   /**
    * @}
    */
-
+private:
   /**
    * @defgroup Paxos_h_election_triggered Steps triggered by an election.
    *
@@ -1245,6 +1245,18 @@ public:
  protected:
   MonitorDBStore *get_store();
 };
+
+inline ostream& operator<<(ostream& out, Paxos::C_Proposal& p)
+{
+  out << " proposed = " << p.proposed << ", tx =\n";
+  MonitorDBStore::Transaction t;
+  bufferlist::iterator p_it = p.bl.begin();
+  t.decode(p_it);
+  JSONFormatter f(true);
+  t.dump(&f);
+  f.flush(out);
+  return out;
+}
 
 #endif
 
