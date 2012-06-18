@@ -140,7 +140,7 @@ void Paxos::handle_collect(MMonPaxos *collect)
     t.put(get_name(), "accepted_pn", accepted_pn);
     JSONFormatter f(true);
     t.dump(&f);
-    dout(20) << __func__ << " transaction dump:\n";
+    dout(30) << __func__ << " transaction dump:\n";
     f.flush(*_dout);
     *_dout << dendl;
     get_store()->apply_transaction(t);
@@ -271,7 +271,7 @@ void Paxos::store_state(MMonPaxos *m)
   if (!t.empty()) {
     JSONFormatter f(true);
     t.dump(&f);
-    dout(20) << __func__ << " transaction dump:\n";
+    dout(30) << __func__ << " transaction dump:\n";
     f.flush(*_dout);
     *_dout << dendl;
     get_store()->apply_transaction(t);
@@ -422,7 +422,7 @@ void Paxos::begin(bufferlist& v)
 
   JSONFormatter f(true);
   t.dump(&f);
-  dout(20) << __func__ << " transaction dump:\n";
+  dout(30) << __func__ << " transaction dump:\n";
   f.flush(*_dout);
   MonitorDBStore::Transaction debug_tx;
   bufferlist::iterator new_value_it = new_value.begin();
@@ -495,7 +495,7 @@ void Paxos::handle_begin(MMonPaxos *begin)
 
   JSONFormatter f(true);
   t.dump(&f);
-  dout(20) << __func__ << " transaction dump:\n";
+  dout(30) << __func__ << " transaction dump:\n";
   f.flush(*_dout);
   *_dout << dendl;
 
@@ -601,7 +601,7 @@ void Paxos::commit()
 
   JSONFormatter f(true);
   t.dump(&f);
-  dout(20) << __func__ << " transaction dump:\n";
+  dout(30) << __func__ << " transaction dump:\n";
   f.flush(*_dout);
   *_dout << dendl;
 
@@ -860,7 +860,7 @@ void Paxos::trim_to(version_t first, bool force)
   if (!t.empty()) {
     JSONFormatter f(true);
     t.dump(&f);
-    dout(20) << __func__ << " transaction dump:\n";
+    dout(30) << __func__ << " transaction dump:\n";
     f.flush(*_dout);
     *_dout << dendl;
     get_store()->apply_transaction(t);
@@ -886,7 +886,7 @@ version_t Paxos::get_new_proposal_number(version_t gt)
   t.put(get_name(), "last_pn", last_pn);
   JSONFormatter f(true);
   t.dump(&f);
-  dout(20) << __func__ << " transaction dump:\n";
+  dout(30) << __func__ << " transaction dump:\n";
   f.flush(*_dout);
   *_dout << dendl;
   get_store()->apply_transaction(t);
