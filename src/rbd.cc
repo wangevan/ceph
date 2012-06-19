@@ -87,6 +87,11 @@ void usage()
        << "                                              mapped by the kernel\n"
        << "  showmapped                                  show the rbd images mapped\n"
        << "                                              by the kernel\n"
+       << "  lock <cookie>                               lock the specified image\n"
+       << "                                              with the given cookie\n"
+       << "  lock_list                                   list the locks on the given image\n"
+       << "  lock_break <addr> <cookie>                  break the lock on the given image\n"
+       << "                                              specified by the addr and cookie\n"
        << "\n"
        << "Other input options:\n"
        << "  -p, --pool <pool>            source pool name\n"
@@ -101,7 +106,10 @@ void usage()
        << "\n"
        << "For the map command:\n"
        << "  --user <username>            rados user to authenticate as\n"
-       << "  --secret <path>              file containing secret key for use with cephx\n";
+       << "  --secret <path>              file containing secret key for use with cephx\n"
+       << "For the lock command:\n"
+       << "  --shared                     Set the lock to be shared rather than exclusive"
+       << std::endl;
 }
 
 void usage_exit()
@@ -873,6 +881,9 @@ enum {
   OPT_MAP,
   OPT_UNMAP,
   OPT_SHOWMAPPED,
+  OPT_LOCK,
+  OPT_LOCK_LIST,
+  OPT_LOCK_BREAK,
 };
 
 static int get_cmd(const char *cmd, bool snapcmd)
@@ -907,6 +918,12 @@ static int get_cmd(const char *cmd, bool snapcmd)
       return OPT_SHOWMAPPED;
     if (strcmp(cmd, "unmap") == 0)
       return OPT_UNMAP;
+    if (strcmp(cmd, "lock") == 0)
+      return OPT_LOCK;
+    if (strcmp(cmd, "list_locks") == 0)
+      return OPT_LOCK_LIST;
+    if (strcmp(cmd, "lock_break") == 0)
+      return OPT_LOCK_BREAK;
   } else {
     if (strcmp(cmd, "create") == 0||
         strcmp(cmd, "add") == 0)
@@ -958,6 +975,11 @@ int main(int argc, const char **argv)
   int order = 0;
   bool old_format = true;
   const char *imgname = NULL, *snapname = NULL, *destname = NULL, *dest_poolname = NULL, *path = NULL, *secretfile = NULL, *user = NULL, *devpath = NULL;
+  const char *lock_addr = NULL, *lock_cookie = NULL;
+  bool exclusive = true;
+  std::set<std::pair<std::string, std::string> > locks;
+  std::set<std::pair<std::string, std::string> >::iterator iter;
+
 
   std::string val;
   std::ostringstream err;
@@ -998,6 +1020,8 @@ int main(int argc, const char **argv)
       secretfile = strdup(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--user", (char*)NULL)) {
       user = strdup(val.c_str());
+    } else if (ceph_argparse_flag(args, i, &val, "--shared", (char*)NULL)) {
+      exclusive = false;
     } else {
       ++i;
     }
@@ -1059,6 +1083,14 @@ int main(int argc, const char **argv)
       case OPT_SHOWMAPPED:
 	usage_exit();
 	break;
+      case OPT_LOCK_BREAK:
+        set_conf_param(v, &lock_addr, NULL);
+        v = *(++i);
+      case OPT_LOCK:
+        set_conf_param(v, &lock_cookie, NULL);
+        break;
+      case OPT_LOCK_LIST:
+        break;
       default:
 	assert(0);
 	break;
@@ -1151,7 +1183,9 @@ int main(int argc, const char **argv)
       (opt_cmd == OPT_RESIZE || opt_cmd == OPT_INFO || opt_cmd == OPT_SNAP_LIST ||
        opt_cmd == OPT_SNAP_CREATE || opt_cmd == OPT_SNAP_ROLLBACK ||
        opt_cmd == OPT_SNAP_REMOVE || opt_cmd == OPT_SNAP_PURGE ||
-       opt_cmd == OPT_EXPORT || opt_cmd == OPT_WATCH || opt_cmd == OPT_COPY)) {
+       opt_cmd == OPT_EXPORT || opt_cmd == OPT_WATCH || opt_cmd == OPT_COPY ||
+       opt_cmd == OPT_LOCK || opt_cmd == OPT_LOCK_LIST ||
+       opt_cmd == OPT_LOCK_BREAK)) {
     r = rbd.open(io_ctx, image, imgname);
     if (r < 0) {
       cerr << "error opening image " << imgname << ": " << cpp_strerror(-r) << std::endl;
@@ -1205,6 +1239,41 @@ int main(int argc, const char **argv)
     r = do_create(rbd, io_ctx, imgname, size, &order, old_format, 0);
     if (r < 0) {
       cerr << "create error: " << cpp_strerror(-r) << std::endl;
+      exit(1);
+    }
+    break;
+
+  case OPT_LOCK:
+    if (exclusive) {
+      r = image.lock_exclusive(lock_cookie);
+    } else {
+      r = image.lock_shared(lock_cookie);
+    }
+    if (r < 0) {
+      cerr << "lock error: " << cpp_strerror(-r) << std::endl;
+      exit(1);
+    }
+    break;
+
+  case OPT_LOCK_LIST:
+    r = image.list_locks(locks, exclusive);
+    if (r < 0) {
+      cerr << "error listing locks: " << cpp_strerror(-r) << std::endl;
+      exit(1);
+    }
+    cout << "There are " << locks.size()
+        << (exclusive ? " exclusive" : " shared")
+        << " locks on this image:\n";
+    for (iter = locks.begin(); iter != locks.end(); ++iter) {
+      cout << "addr: " << iter->first << "; cookie: " << iter->second << "\n";
+    }
+    cout << std::endl;
+    break;
+
+  case OPT_LOCK_BREAK:
+    r = image.break_lock(lock_addr, lock_cookie);
+    if (r < 0) {
+      cerr << "error breaking lock: " << cpp_strerror(-r) << std::endl;
       exit(1);
     }
     break;
