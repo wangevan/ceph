@@ -1685,24 +1685,36 @@ int lock_exclusive(ImageCtx *ictx, const std::string& cookie)
    * checks that we think we will succeed. But for now, let's not
    * duplicate that code.
    */
+  if (ictx->old_format) {
+    return -ENOEXEC;
+  }
   return cls_client::lock_image_exclusive(&ictx->md_ctx,
                                           ictx->header_oid, cookie);
 }
 
 int lock_shared(ImageCtx *ictx, const std::string& cookie)
 {
+  if (ictx->old_format) {
+    return -ENOEXEC;
+  }
   return cls_client::lock_image_shared(&ictx->md_ctx,
                                        ictx->header_oid, cookie);
 }
 
 int unlock(ImageCtx *ictx, const std::string& cookie)
 {
+  if (ictx->old_format) {
+    return -ENOEXEC;
+  }
   return cls_client::unlock_image(&ictx->md_ctx, ictx->header_oid, cookie);
 }
 
 int break_lock(ImageCtx *ictx, const std::string& lock_holder,
                const std::string& cookie)
 {
+  if (ictx->old_format) {
+    return -ENOEXEC;
+  }
   return cls_client::break_lock(&ictx->md_ctx, ictx->header_oid,
                                 lock_holder, cookie);
 }
