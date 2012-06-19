@@ -393,7 +393,7 @@ public:
    * @returns true if in state ACTIVE; false otherwise.
    */
   bool is_active() {
-    return (!proposing && paxos->is_active());
+    return (!proposing && !paxos->is_recovering());
   }
 
   /**
@@ -431,7 +431,10 @@ public:
     if (ver > get_last_committed())
       return false;
 
-    return paxos->is_readable(0);
+    return ((mon->is_peon() || mon->is_leader())
+      && (!proposing && !paxos->is_recovering())
+      && (get_last_committed() > 0)
+      && ((mon->get_quorum().size == 1) || paxos->is_valid_lease()));
   }
 
   /**
@@ -442,7 +445,7 @@ public:
    * @returns true if writeable; false otherwise
    */
   bool is_writeable() {
-    return (!proposing && paxos->is_writeable());
+    return (!proposing && mon->is_leader() && paxos->is_lease_valid());
   }
 
   /**
