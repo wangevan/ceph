@@ -281,18 +281,37 @@ int get_features(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 }
 
 /**
+ * verify that the header object exists
+ *
+ * @return 0 if the object exists, -ENOENT if it does not, or other error
+ */
+int check_exists(cls_method_context_t hctx)
+{
+  uint64_t size;
+  time_t mtime;
+  return cls_cxx_stat(hctx, &size, &mtime);
+}
+
+/**
  * check that given feature(s) are set
  *
  * @param hctx context
  * @param need features needed
- * @return 0 if features are set, negative error (like ENOEXEC) otherwise
+ * @return 0 if features are set, -ENOEXEC if missing features, -ENOENT if the image dne, etc
  */
 int require_feature(cls_method_context_t hctx, uint64_t need)
 {
   uint64_t features;
   int r = read_key(hctx, "features", &features);
-  if (r == -ENOENT)   // this implies it's an old-style image with no features
+  if (r == -ENOENT) {
+    // really?
+    r = check_exists(hctx);
+    if (r < 0)
+      return r;
+
+    // not really.  this implies it's an old-style image with no features
     return -ENOEXEC;
+  }
   if (r < 0)
     return r;
   if ((features & need) != need) {
@@ -691,19 +710,6 @@ int list_locks(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   }
   ::encode((exclusive_string == RBD_LOCK_EXCLUSIVE), *out);
   return r;
-}
-
-
-/**
- * verify that the header object exists
- *
- * @return 0 if the object exists, -ENOENT if it does not, or other error
- */
-int check_exists(cls_method_context_t hctx)
-{
-  uint64_t size;
-  time_t mtime;
-  return cls_cxx_stat(hctx, &size, &mtime);
 }
 
 /**
