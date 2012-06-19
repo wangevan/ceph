@@ -313,6 +313,12 @@ int require_feature(cls_method_context_t hctx, uint64_t need)
  */
 int get_size(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
+
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
+
   uint64_t snap_id, size;
   uint8_t order;
 
@@ -325,7 +331,7 @@ int get_size(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 
   CLS_LOG(20, "get_size snap_id=%llu", snap_id);
 
-  int r = read_key(hctx, "order", &order);
+  r = read_key(hctx, "order", &order);
   if (r < 0) {
     CLS_ERR("failed to read the order off of disk: %s", strerror(r));
     return r;
@@ -363,6 +369,11 @@ int get_size(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
  */
 int set_size(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
+
   uint64_t size;
 
   bufferlist::iterator iter = in->begin();
@@ -372,10 +383,8 @@ int set_size(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
     return -EINVAL;
   }
 
-  // check that size exists to make sure this is a header object
-  // that was created correctly
   uint64_t orig_size;
-  int r = read_key(hctx, "size", &orig_size);
+  r = read_key(hctx, "size", &orig_size);
   if (r < 0) {
     CLS_ERR("Could not read image's size off disk: %s", strerror(r));
     return r;
@@ -491,6 +500,10 @@ int lock_image_exclusive(cls_method_context_t hctx,
                          bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "lock_image_exclusive");
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
   string lock_cookie;
   try {
     bufferlist::iterator iter = in->begin();
@@ -515,6 +528,10 @@ int lock_image_shared(cls_method_context_t hctx,
                       bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "lock_image_shared");
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
   string lock_cookie;
   try {
     bufferlist::iterator iter = in->begin();
@@ -577,6 +594,10 @@ int unlock_image(cls_method_context_t hctx,
                  bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "unlock_image");
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
   string lock_cookie;
   try {
     bufferlist::iterator iter = in->begin();
@@ -586,7 +607,7 @@ int unlock_image(cls_method_context_t hctx,
   }
 
   entity_inst_t inst;
-  int r = cls_get_request_origin(hctx, &inst);
+  r = cls_get_request_origin(hctx, &inst);
   assert(r == 0);
   stringstream inst_stringstream;
   inst_stringstream << inst;
@@ -608,6 +629,10 @@ int break_lock(cls_method_context_t hctx,
                bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "break_lock");
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
   string locker;
   string lock_cookie;
   try {
@@ -639,10 +664,14 @@ int break_lock(cls_method_context_t hctx,
 int list_locks(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "list_locks");
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
   string key = RBD_LOCKS_KEY;
   string exclusive_string;
   bool have_locks = true;
-  int r = cls_cxx_map_get_val(hctx, key, out);
+  r = cls_cxx_map_get_val(hctx, key, out);
   if (r != 0 && r != -ENOENT) {
     CLS_ERR("Failure in reading list of current lockers: %s", strerror(r));
     return r;
@@ -856,8 +885,11 @@ int remove_parent(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 int get_snapcontext(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "get_snapcontext");
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
 
-  int r;
   uint64_t max_read = RBD_MAX_KEYS_READ;
   vector<snapid_t> snap_ids;
   string last_read = RBD_SNAP_KEY_PREFIX;
@@ -901,9 +933,13 @@ int get_snapcontext(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 int get_object_prefix(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "get_object_prefix");
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
 
   string object_prefix;
-  int r = read_key(hctx, "object_prefix", &object_prefix);
+  r = read_key(hctx, "object_prefix", &object_prefix);
   if (r < 0) {
     CLS_ERR("failed to read the image's object prefix off of disk: %s",
             strerror(r));
@@ -917,6 +953,11 @@ int get_object_prefix(cls_method_context_t hctx, bufferlist *in, bufferlist *out
 
 int get_snapshot_name(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
+
   uint64_t snap_id;
 
   bufferlist::iterator iter = in->begin();
@@ -934,7 +975,7 @@ int get_snapshot_name(cls_method_context_t hctx, bufferlist *in, bufferlist *out
   cls_rbd_snap snap;
   string snapshot_key;
   key_from_snap_id(snap_id, &snapshot_key);
-  int r = read_key(hctx, snapshot_key, &snap);
+  r = read_key(hctx, snapshot_key, &snap);
   if (r < 0)
     return r;
 
@@ -957,6 +998,11 @@ int get_snapshot_name(cls_method_context_t hctx, bufferlist *in, bufferlist *out
  */
 int snapshot_add(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
+
   bufferlist snap_namebl, snap_idbl;
   cls_rbd_snap snap_meta;
 
@@ -974,7 +1020,7 @@ int snapshot_add(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
     return -EINVAL;
 
   uint64_t cur_snap_seq;
-  int r = read_key(hctx, "snap_seq", &cur_snap_seq);
+  r = read_key(hctx, "snap_seq", &cur_snap_seq);
   if (r < 0) {
     CLS_ERR("Could not read image's snap_seq off disk: %s", strerror(r));
     return r;
@@ -1066,6 +1112,11 @@ int snapshot_add(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
  */
 int snapshot_remove(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
+  int r = require_feature(hctx, 0);
+  if (r < 0) {
+    return r;
+  }
+
   snapid_t snap_id;
 
   try {
@@ -1084,7 +1135,7 @@ int snapshot_remove(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   string snapshot_key;
   bufferlist snapbl;
   key_from_snap_id(snap_id, &snapshot_key);
-  int r = cls_cxx_map_get_val(hctx, snapshot_key, &snapbl);
+  r = cls_cxx_map_get_val(hctx, snapshot_key, &snapbl);
   if (r == -ENOENT)
     return -ENOENT;
 
