@@ -177,7 +177,7 @@ public:
   /**
    * Leader is about to propose a new value, but hasn't gotten to do it yet.
    */
-  const static int STATE_WARMING_UP = 4;
+  const static int STATE_PREPARING = 4;
  
   /**
    * Obtain state name from constant value.
@@ -193,7 +193,7 @@ public:
     case STATE_RECOVERING: return "recovering";
     case STATE_ACTIVE: return "active";
     case STATE_UPDATING: return "updating";
-    case STATE_WARMING_UP: return "warming-up";
+    case STATE_PREPARING: return "preparing update";
     default: assert(0); return 0;
     }
   }
@@ -505,7 +505,6 @@ private:
   /**
    * @}
    */
-  Mutex proposals_lock;
 
   /**
    * @defgroup Paxos_h_sync_warns Synchronization warnings
@@ -591,6 +590,7 @@ public:
     Context *proposer_context;
   public:
     bufferlist bl;
+    // for debug purposes. Will go away. Soon.
     bool proposed;
 
     C_Proposal(Context *c, bufferlist& proposal_bl) : 
@@ -600,8 +600,8 @@ public:
       { }
     
     void finish(int r) {
-//      assert(proposer_context != NULL);
-      std::cout << __func__ << " finishing; proposer: " << proposer_context << std::endl;
+      std::cout << __func__ << " finishing; proposer: "
+		<< proposer_context << std::endl;
       if (proposer_context)
         proposer_context->finish(r);
     }
