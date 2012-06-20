@@ -25,6 +25,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -40,6 +45,8 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
   [1]
   $ rbd resize img@snap
   error: snapname specified for a command that doesn't use it
@@ -68,6 +75,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -83,6 +95,8 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
   [1]
   $ rbd import --snap=snap1 /bin/ls ls
   error: snapname specified for a command that doesn't use it
@@ -111,6 +125,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -126,6 +145,8 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
   [1]
   $ rbd create --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -154,6 +175,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -169,6 +195,8 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
   [1]
   $ rbd rm --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -197,6 +225,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -212,6 +245,8 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
   [1]
   $ rbd rename --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -240,6 +275,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -255,6 +295,8 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
   [1]
   $ rbd ls --snap=snap rbd
   error: snapname specified for a command that doesn't use it
@@ -283,6 +325,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -298,6 +345,8 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
   [1]
   $ rbd snap ls --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -326,6 +375,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -341,6 +395,8 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
   [1]
   $ rbd watch --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -369,6 +425,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -384,4 +445,6 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
   [1]

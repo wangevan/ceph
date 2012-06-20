@@ -24,6 +24,11 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
+    lock <cookie>                               lock the specified image
+                                                with the given cookie
+    lock_list                                   list the locks on the given image
+    lock_break <addr> <cookie>                  break the lock on the given image
+                                                specified by the addr and cookie
   
   Other input options:
     -p, --pool <pool>            source pool name
@@ -39,3 +44,5 @@
   For the map command:
     --user <username>            rados user to authenticate as
     --secret <path>              file containing secret key for use with cephx
+  For the lock command:
+    --shared                     Set the lock to be shared rather than exclusive
