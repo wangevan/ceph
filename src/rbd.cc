@@ -87,10 +87,10 @@ void usage()
        << "                                              mapped by the kernel\n"
        << "  showmapped                                  show the rbd images mapped\n"
        << "                                              by the kernel\n"
-       << "  lock add <cookie> --image <image>           lock the specified image\n"
+       << "  lock add <cookie> <image>                   lock the specified image\n"
        << "                                              with the given cookie\n"
-       << "  lock list --image <image>                   list the locks on the given image\n"
-       << "  lock remove <addr> <cookie> --image <image> break the lock on the given image\n"
+       << "  lock list <image>                           list the locks on the given image\n"
+       << "  lock remove <addr> <cookie> <image>         break the lock on the given image\n"
        << "                                              specified by the addr and cookie\n"
        << "\n"
        << "Other input options:\n"
@@ -1091,13 +1091,20 @@ int main(int argc, const char **argv)
 	usage_exit();
 	break;
       case OPT_LOCK_BREAK:
-        set_conf_param(v, &lock_addr, NULL);
-        v = *(++i);
+	set_conf_param(v, &lock_addr, NULL);
+	v = *(++i);
+	set_conf_param(v, &lock_cookie, NULL);
+	v = *(++i);
+	set_conf_param(v, &imgname, NULL);
+	break;
       case OPT_LOCK:
-        set_conf_param(v, &lock_cookie, NULL);
-        break;
+	set_conf_param(v, &lock_cookie, NULL);
+	v = *(++i);
+	set_conf_param(v, &imgname, NULL);
+	break;
       case OPT_LOCK_LIST:
-        break;
+	set_conf_param(v, &imgname, NULL);
+	break;
       default:
 	assert(0);
 	break;
