@@ -87,10 +87,10 @@ void usage()
        << "                                              mapped by the kernel\n"
        << "  showmapped                                  show the rbd images mapped\n"
        << "                                              by the kernel\n"
-       << "  lock <cookie>                               lock the specified image\n"
+       << "  lock add <cookie>                           lock the specified image\n"
        << "                                              with the given cookie\n"
-       << "  lock_list                                   list the locks on the given image\n"
-       << "  lock_break <addr> <cookie>                  break the lock on the given image\n"
+       << "  lock list                                   list the locks on the given image\n"
+       << "  lock remove <addr> <cookie>                 break the lock on the given image\n"
        << "                                              specified by the addr and cookie\n"
        << "\n"
        << "Other input options:\n"
@@ -886,9 +886,9 @@ enum {
   OPT_LOCK_BREAK,
 };
 
-static int get_cmd(const char *cmd, bool snapcmd)
+static int get_cmd(const char *cmd, bool snapcmd, bool lockcmd)
 {
-  if (!snapcmd) {
+  if (!snapcmd && !lockcmd) {
     if (strcmp(cmd, "ls") == 0 ||
         strcmp(cmd, "list") == 0)
       return OPT_LIST;
@@ -918,13 +918,7 @@ static int get_cmd(const char *cmd, bool snapcmd)
       return OPT_SHOWMAPPED;
     if (strcmp(cmd, "unmap") == 0)
       return OPT_UNMAP;
-    if (strcmp(cmd, "lock") == 0)
-      return OPT_LOCK;
-    if (strcmp(cmd, "list_locks") == 0)
-      return OPT_LOCK_LIST;
-    if (strcmp(cmd, "lock_break") == 0)
-      return OPT_LOCK_BREAK;
-  } else {
+  } else if (snapcmd) {
     if (strcmp(cmd, "create") == 0||
         strcmp(cmd, "add") == 0)
       return OPT_SNAP_CREATE;
@@ -939,6 +933,13 @@ static int get_cmd(const char *cmd, bool snapcmd)
       return OPT_SNAP_LIST;
     if (strcmp(cmd, "purge") == 0)
       return OPT_SNAP_PURGE;
+  } else if (lockcmd) {
+    if (strcmp(cmd, "add") == 0)
+      return OPT_LOCK;
+    if (strcmp(cmd, "list") == 0)
+      return OPT_LOCK_LIST;
+    if (strcmp(cmd, "remove") == 0)
+      return OPT_LOCK_BREAK;
   }
 
   return OPT_NO_CMD;
@@ -1038,10 +1039,16 @@ int main(int argc, const char **argv)
       cerr << "which snap command do you want?" << std::endl;
       usage_exit();
     }
-    opt_cmd = get_cmd(*i, true);
-  }
-  else {
-    opt_cmd = get_cmd(*i, false);
+    opt_cmd = get_cmd(*i, true, false);
+  } else if (strcmp(*i, "lock") == 0) {
+    i = args.erase(i);
+    if (i == args.end()) {
+      cerr << "which lock command do you want?" << std::endl;
+      usage_exit();
+    }
+    opt_cmd = get_cmd(*i, false, true);
+  } else {
+    opt_cmd = get_cmd(*i, false, false);
   }
   if (opt_cmd == OPT_NO_CMD) {
     cerr << "error parsing command '" << *i << "'" << std::endl;
