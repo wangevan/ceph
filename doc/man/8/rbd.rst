@@ -62,6 +62,11 @@ Parameters
 
    Specifies a file containing the secret to use with the map command.
 
+.. option:: --image imagename
+
+   Specifies the name of the image to be used in this command. For most
+   commands this is an alternative to naming the image as a positional
+   argument, but it is required for the lock commands.
 
 Commands
 ========
@@ -111,6 +116,16 @@ Commands
 
 :command:`snap` purge [*image-name*]
   Removes all snapshots from an image.
+
+:command:`lock` list
+  Lists all the locks on an image.
+
+:command:`lock` add [*cookie*]
+  Add a lock on an image, using the given cookie.
+
+:command:`lock` remove [*locker*] [*cookie*]
+  Remove the lock held by the given locker, with the given cookie, from
+  the image.
 
 :command:`map` [*image-name*]
   Maps the specified image to a block device via the rbd kernel module.
