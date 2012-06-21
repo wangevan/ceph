@@ -1271,9 +1271,10 @@ int main(int argc, const char **argv)
     if (locks.size()) {
       cout << "There are " << locks.size()
            << (exclusive ? " exclusive" : " shared")
-           << " locks on this image:";
+           << " locks on this image:\n"
+           << "locker\t\t\t\t\t\tcookie";
       for (iter = locks.begin(); iter != locks.end(); ++iter) {
-        cout << "\naddr: " << iter->first << "; cookie: " << iter->second;
+        cout << "\n" << iter->first << "\t\t" << iter->second;
       }
     } else {
       cout << "There are no locks on this image";
