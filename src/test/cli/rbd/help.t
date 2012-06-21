@@ -24,10 +24,10 @@
                                                 mapped by the kernel
     showmapped                                  show the rbd images mapped
                                                 by the kernel
-    lock <cookie>                               lock the specified image
+    lock add <cookie> --image <image>           lock the specified image
                                                 with the given cookie
-    lock_list                                   list the locks on the given image
-    lock_break <addr> <cookie>                  break the lock on the given image
+    lock list --image <image>                   list the locks on the given image
+    lock remove <addr> <cookie> --image <image> break the lock on the given image
                                                 specified by the addr and cookie
   
   Other input options:
