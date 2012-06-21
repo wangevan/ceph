@@ -1261,11 +1261,15 @@ int main(int argc, const char **argv)
       cerr << "error listing locks: " << cpp_strerror(-r) << std::endl;
       exit(1);
     }
-    cout << "There are " << locks.size()
-        << (exclusive ? " exclusive" : " shared")
-        << " locks on this image:\n";
-    for (iter = locks.begin(); iter != locks.end(); ++iter) {
-      cout << "addr: " << iter->first << "; cookie: " << iter->second << "\n";
+    if (locks.size()) {
+      cout << "There are " << locks.size()
+           << (exclusive ? " exclusive" : " shared")
+           << " locks on this image:";
+      for (iter = locks.begin(); iter != locks.end(); ++iter) {
+        cout << "\naddr: " << iter->first << "; cookie: " << iter->second;
+      }
+    } else {
+      cout << "There are no locks on this image";
     }
     cout << std::endl;
     break;
