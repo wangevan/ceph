@@ -1101,7 +1101,7 @@ void Paxos::list_proposals(ostream& out)
 
 void Paxos::propose_queued()
 {
-  assert(!is_active());
+  assert(is_active());
   assert(proposals.size() > 0);
 
   state = STATE_PREPARING;
