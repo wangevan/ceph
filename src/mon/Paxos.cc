@@ -41,8 +41,6 @@ void Paxos::prepare_bootstrap()
   dout(0) << __func__ << dendl;
 
   going_to_bootstrap = true;
-  proposals_done.Lock();
-  proposals_done_cond.Wait(proposals_done);
 }
 
 MonitorDBStore *Paxos::get_store()
@@ -750,8 +748,8 @@ void Paxos::finish_proposal()
 	   << " proposals left " << proposals.size() << dendl;
 
   if ((proposals.size() == 0) && going_to_bootstrap) {
-    dout(0) << __func__ << " no more proposals; signaling to bootstrap." << dendl;
-    proposals_done_cond.Signal();
+    dout(0) << __func__ << " no more proposals; bootstraping." << dendl;
+    mon->bootstrap();
     return;
   }
 
