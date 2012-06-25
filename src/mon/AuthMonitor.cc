@@ -330,7 +330,8 @@ uint64_t AuthMonitor::assign_global_id(MAuth *m, bool should_increase_max)
       MMonGlobalID *req = new MMonGlobalID();
       req->old_max_id = max_global_id;
       mon->messenger->send_message(req, mon->monmap->get_inst(leader));
-      paxos->wait_for_commit(new C_RetryMessage(this, m));
+      wait_for_finished_proposal(new C_RetryMessage(this, m));
+      //paxos->wait_for_commit(new C_RetryMessage(this, m));
       return 0;
     } else {
       if (!should_increase_max)
@@ -431,7 +432,8 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       ret = s->auth_handler->handle_request(indata, response_bl, s->global_id, caps_info, &auid);
     }
     if (ret == -EIO) {
-      paxos->wait_for_active(new C_RetryMessage(this, m));
+      wait_for_active(new C_RetryMessage(this,m));
+      //paxos->wait_for_active(new C_RetryMessage(this, m));
       goto done;
     }
     if (caps_info.caps.length()) {
@@ -616,7 +618,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
       import_keyring(keyring);
       ss << "imported keyring";
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      //paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else if (m->cmd[1] == "add" && m->cmd.size() >= 2) {
@@ -663,7 +666,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
       ss << "added key for " << auth_inc.name;
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      //paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else if (m->cmd[1] == "get-or-create-key" && m->cmd.size() >= 3) {
@@ -705,7 +709,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 	  ::decode(auth_inc, q);
 	  if (auth_inc.op == KeyServerData::AUTH_INC_ADD &&
 	      auth_inc.name == entity) {
-	    paxos->wait_for_commit(new C_RetryMessage(this, m));
+	    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+	    //paxos->wait_for_commit(new C_RetryMessage(this, m));
 	    return true;
 	  }
 	}
@@ -723,7 +728,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
       ss << auth_inc.auth.key;
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      //paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else if (m->cmd[1] == "caps" && m->cmd.size() >= 3) {
@@ -750,7 +756,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
       ss << "updated caps for " << auth_inc.name;
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      //paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;     
     }
     else if (m->cmd[1] == "del" && m->cmd.size() >= 3) {
@@ -767,7 +774,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
       ss << "updated";
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+      //paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else {
