@@ -421,7 +421,8 @@ public:
    * @returns true if in state ACTIVE; false otherwise.
    */
   bool is_active() {
-    return (!is_proposing() && !paxos->is_recovering());
+    return (!is_proposing() && !paxos->is_recovering()
+	&& !paxos->is_bootstrapping());
   }
 
   /**
@@ -476,7 +477,8 @@ public:
    * @returns true if writeable; false otherwise
    */
   bool is_writeable() {
-    return (!is_proposing() && mon->is_leader() && paxos->is_lease_valid());
+    return (!is_proposing() && mon->is_leader()
+	&& paxos->is_lease_valid() && !paxos->is_bootstrapping());
   }
 
   void wait_for_finished_proposal(Context *c) {
@@ -484,6 +486,9 @@ public:
   }
 
   void wait_for_active(Context *c) {
+    if (paxos->is_bootstrapping())
+      paxos->wait_for_active(c);
+
     if (is_proposing())
       wait_for_finished_proposal(c);
     else
@@ -505,6 +510,9 @@ public:
   }
 
   void wait_for_writeable(Context *c) {
+    if (paxos->is_bootstrapping())
+      paxos->wait_for_writeable(c);
+
     if (is_proposing())
       wait_for_finished_proposal(c);
     else
