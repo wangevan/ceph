@@ -486,8 +486,10 @@ public:
   }
 
   void wait_for_active(Context *c) {
-    if (paxos->is_bootstrapping())
+    if (paxos->is_bootstrapping()) {
       paxos->wait_for_active(c);
+      return;
+    }
 
     if (is_proposing())
       wait_for_finished_proposal(c);
@@ -510,8 +512,10 @@ public:
   }
 
   void wait_for_writeable(Context *c) {
-    if (paxos->is_bootstrapping())
+    if (paxos->is_bootstrapping()) {
       paxos->wait_for_writeable(c);
+      return;
+    }
 
     if (is_proposing())
       wait_for_finished_proposal(c);
