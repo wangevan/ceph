@@ -244,6 +244,33 @@ class MonitorDBStore
     return combine_strings(prefix, os.str());
   }
 
+  void clear(set<string>& exceptions) {
+    KeyValueDB::WholeSpaceIterator it = db->get_iterator();
+    it->seek_to_first();
+
+    Transaction t;
+
+    while (it->valid()) {
+      pair<string,string> raw_key = it->raw_key();
+
+      assert(!(raw_key.first.empty() && raw_key.second.empty()));
+
+      // this prefix is not on the exceptions list
+      if (exceptions.count(raw_key.first) > 0)
+	t.erase(raw_key.first, raw_key.second);
+
+      it->next();
+    }
+
+    if (!t.empty())
+      apply_transaction(t);
+  }
+
+  void clear() {
+    set<string> exceptions;
+    clear(exceptions);
+  }
+
   MonitorDBStore(const string& path) : db(0) {
 
     string::const_reverse_iterator rit;
