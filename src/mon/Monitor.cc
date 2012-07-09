@@ -28,6 +28,7 @@
 #include "messages/MGenericMessage.h"
 #include "messages/MMonCommand.h"
 #include "messages/MMonCommandAck.h"
+#include "messages/MMonSync.h"
 #include "messages/MMonProbe.h"
 #include "messages/MMonJoin.h"
 #include "messages/MMonPaxos.h"
@@ -109,6 +110,12 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
   
   elector(this),
   leader(0),
+
+  // trim & store sync
+  trim_lock("Monitor::trim_lock"),
+  sync_leader(),
+  sync_provider(),
+
   probe_timeout_event(NULL),
 
   paxos_service(PAXOS_NUM),
@@ -454,6 +461,26 @@ void Monitor::bootstrap()
     messenger->mark_down_all();
   }
 
+  // clear everything trim/sync related
+  {
+    map<entity_inst_t,Context*>::iterator iter = trim_timeouts.begin();
+    for (; iter != trim_timeouts.end(); ++iter) {
+      if ((*iter).second)
+	timer.cancel_event((*iter).second);
+    }
+    trim_timeouts.clear();
+  }
+  {
+    map<entity_inst_t,SyncEntity>::iterator iter = sync_entities.begin();
+    for (; iter != sync_entities.end(); ++iter) {
+      (*iter).second->cancel_timeout();
+    }
+    sync_entities.clear();
+  }
+  sync_leader.reset();
+  sync_provider.reset();
+
+
   // reset
   state = STATE_PROBING;
 
@@ -535,6 +562,352 @@ void Monitor::reset()
   for (vector<PaxosService*>::iterator p = paxos_service.begin(); p != paxos_service.end(); p++)
     (*p)->restart();
 }
+
+#if 0
+void Monitor::sync_cancel_timeout()
+{
+  if (sync_timeout_event) {
+    dout(10) << __func__ << " " << sync_timeout_event << dendl;
+    timer.cancel_event(sync_timeout_event);
+    sync_timeout_event = NULL;
+  } else
+    dout(10) << __func__ << " none scheduled" << dendl;
+}
+
+void Monitor::sync_reset_timeout()
+{
+  sync_cancel_timeout();
+  sync_timeout_event = new C_SyncTimeout(this);
+  timer.add_event_after(30.0, sync_timeout_event);
+  dout(10) << __func__ << " " << sync_timeout_event
+	   << " after 30.0 seconds" << dendl;
+}
+
+// requester (new mon)
+void Monitor::sync_start(entity_inst_t& other_mon)
+{
+  state = STATE_SYNCHRONIZING;
+
+  set<string> clear_exceptions;
+  clear_exceptions.insert(MONITOR_NAME);
+  store->clear(clear_exceptions);
+
+  MonitorDBStore::Transaction t;
+  t.put("sync", "ongoing", 1);
+  store->apply_transaction(t);
+
+  sync_reset_timeout();
+
+  MMonSync *m = new MMonSync(MMonSync::OP_START);
+  messenger->send_message(m, other_mon);
+}
+#endif
+
+// leader
+
+void Monitor::sync_send_heartbeat(entity_inst_t &other, bool reply)
+{
+  uint32_t op = (reply ? MMonSync::OP_HEARTBEAT_REPLY : MMonSync::OP_HEARTBEAT);
+  MMonSync *msg = new MMonSync(op);
+  messenger->send_message(msg, other);
+}
+
+void Monitor::handle_sync_start(MMonSync *m)
+{
+  Mutex::Locker l(trim_lock);
+  entity_inst_t other = m->get_source_inst();
+  MMonSync *msg = new MMonSync(MMonSync::OP_START_REPLY);
+
+  if (paxos->should_trim()) {
+    msg->flags |= MMonSync::FLAG_RETRY;
+  } else {
+    assert(trim_timeouts.count(other) == 0);
+    trim_timeouts.insert(make_pair(other, new C_TrimTimeout(this, other)));
+
+    paxos->trim_disable();
+  }
+  messenger->send_message(msg, other);
+  m->put();
+}
+
+void Monitor::handle_sync_heartbeat(MMonSync *m)
+{
+  entity_inst_t other = m->get_source_inst();
+  if (trim_timeouts.count(other) == 0) {
+    dout(5) << __func__ << " received heartbeat from " << other
+	    << " not on the trim map; have it timed out?" << dendl;
+    return;
+  }
+
+  if (trim_timeouts[other])
+    timer.cancel_event(trim_timeouts[other]);
+  trim_timeouts[other] = new C_TrimTimeout(this, other);
+  timer.add_event_after(g_conf->mon_sync_trim_timeout, trim_timeouts[other]);
+  sync_send_heartbeat(other, true);
+  m->put();
+}
+
+void Monitor::sync_finish(entity_inst_t &entity)
+{
+  Mutex::Locker l(trim_lock);
+
+  if (trim_timeouts.count(entity) > 0)
+    trim_timeouts.erase(entity);
+
+  if (paxos->is_trim_disabled() && (trim_timeouts.size() == 0))
+    paxos->trim_enable();
+}
+
+void Monitor::handle_sync_finish(MMonSync *m)
+{
+  entity_inst_t other = m->get_source_inst();
+  sync_finish(other);
+  m->put();
+}
+
+// end of leader
+
+// synchronization provider
+void Monitor::handle_sync_start_chunks(MMonSync *m)
+{
+  entity_inst_t other = m->get_source_inst();
+  if (sync_entities.count(other) > 0) {
+    dout(5) << __func__ << " we already have a sync for " << other
+	    << "; maybe it restarted? get rid of it anyway." << dendl;
+    sync_entities.erase(other);
+  }
+
+  SyncEntity sync = get_sync_entity(other, this);
+  sync->version = paxos->get_version();
+  sync_entities.insert(make_pair(other, sync));
+  sync_send_chunks(sync, m->first_key, m->last_key);
+  m->put();
+}
+
+void Monitor::handle_sync_chunk_reply(MMonSync *m)
+{
+  entity_inst_t other = m->get_source_inst();
+  assert(sync_entities.count(other) > 0);
+  sync_send_chunks(sync_entities[other], m->first_key, m->last_key);
+  m->put();
+}
+
+void Monitor::sync_send_chunks(SyncEntity sync,
+			       pair<string,string> &first_key,
+			       pair<string,string> &last_key)
+{
+  sync->cancel_timeout();
+  sync->set_timeout(new C_SyncTimeout(this, sync->entity),
+		    g_conf->mon_sync_timeout);
+
+  // Depending on MonitorDBStore's synchronizer implementation
+  MMonSync *msg = new MMonSync(MMonSync::OP_CHUNK);
+  messenger->send_message(msg, sync->entity);
+}
+
+// end of synchronization provider)
+
+/**
+ * Start Sync process
+ *
+ * Create SyncEntity instances for the leader and the provider;
+ * Send OP_START message to the leader;
+ * Set trim timeout on the leader
+ *
+ * @param other Synchronization provider to-be.
+ */
+void Monitor::sync_start(entity_inst_t &other)
+{
+  state = STATE_SYNCHRONIZING;
+
+  entity_inst_t leader = monmap->get_inst(get_leader());
+  sync_leader = get_sync_entity(leader, this);
+  sync_provider = get_sync_entity(other, this);
+
+  sync_leader->set_timeout(new C_SyncStartTimeout(this, leader),
+			   g_conf->mon_sync_trim_timeout);
+
+  MMonSync *m = new MMonSync(MMonSync::OP_START);
+  messenger->send_message(m, leader);
+}
+
+void Monitor::handle_sync_start_reply(MMonSync *m)
+{
+  entity_inst_t other = m->get_source_inst();
+  assert(state == STATE_SYNCHRONIZING);
+
+  assert(other == monmap->get_inst(get_leader()));
+  assert(sync_leader.get() != NULL);
+  assert(other == sync_leader->entity);
+
+  assert(sync_provider.get() != NULL);
+
+  sync_leader->cancel_timeout();
+  
+  if (m->flags & MMonSync::FLAG_RETRY) {
+    sync_leader->set_timeout(new C_SyncStartRetry(this, sync_leader->entity),
+			     g_conf->mon_sync_backoff_timeout);
+    return;
+  }
+
+  sync_leader->set_timeout(new C_HeartbeatTimeout(this, sync_leader->entity),
+			   g_conf->mon_sync_heartbeat_timeout);
+  sync_send_heartbeat(sync_leader->entity);
+
+  sync_provider->set_timeout(new C_SyncTimeout(this, sync_provider->entity),
+			     g_conf->mon_sync_timeout);
+  MMonSync *msg = new MMonSync(MMonSync::OP_START_CHUNKS);
+  messenger->send_message(msg, sync_provider->entity);
+}
+
+void Monitor::handle_sync_heartbeat_reply(MMonSync *m)
+{
+  entity_inst_t other = m->get_source_inst();
+  assert(state == STATE_SYNCHRONIZING);
+
+  assert(other == monmap->get_inst(get_leader()));
+  assert(sync_leader.get() != NULL);
+  assert(sync_leader->entity == other);
+
+  sync_leader->cancel_timeout();
+  sync_leader->set_timeout(new C_HeartbeatTimeout(this, sync_leader->entity),
+			   g_conf->mon_sync_heartbeat_timeout);
+}
+
+
+void Monitor::handle_sync_chunk(MMonSync *m)
+{
+  entity_inst_t other = m->get_source_inst();
+  assert(state == STATE_SYNCHRONIZING);
+
+  assert(sync_leader.get() != NULL);
+  assert(sync_leader->entity == monmap->get_inst(get_leader()));
+
+  assert(sync_provider.get() != NULL);
+  assert(other == sync_provider->entity);
+
+  sync_provider->cancel_timeout();
+  sync_send_heartbeat(sync_leader->entity);
+
+//  sync_provider->synchronizer.queue(m->chunk_bl);
+  sync_provider->set_timeout(new C_SyncTimeout(this, sync_provider->entity),
+			     g_conf->mon_sync_timeout);
+
+  if (!(m->flags & MMonSync::FLAG_LAST)) {
+    MMonSync *msg = new MMonSync(MMonSync::OP_CHUNK_REPLY);
+    messenger->send_message(msg, sync_provider->entity);
+  }
+
+//  sync_provider->synchronizer.apply();
+
+  if (m->flags & MMonSync::FLAG_LAST)
+    sync_stop();
+
+  m->put();
+}
+
+void Monitor::sync_stop()
+{
+  sync_leader->cancel_timeout();
+  sync_provider->cancel_timeout();
+
+  entity_inst_t leader = monmap->get_inst(get_leader());
+  MMonSync *msg = new MMonSync(MMonSync::OP_FINISH);
+  messenger->send_message(msg, leader);
+
+  bootstrap();
+}
+/*
+void Monitor::handle_sync(MMonSync *m)
+{
+  dout(10) << __func__ << " " << *m << dendl;
+  switch (m->op) {
+  case MMonSync::OP_START:
+    handle_sync_start(m);
+    break;
+  case MMonSync::OP_CHUNK:
+    handle_sync_chunk(m);
+    break;
+  case MMonSync::OP_CHUNK_ACK:
+    handle_sync_chunk_ack(m);
+    break;
+  case MMonSync::OP_TRIM_DISABLE:
+    handle_sync_trim_disable(m);
+    break;
+  case MMonSync::OP_TRIM_ENABLE:
+    handle_sync_trim_enable(m);
+    break;
+  case MMonSync::OP_TRIM_DISABLE_ACK:
+    handle_sync_trim_disable_ack(m);
+    break;
+  default:
+    dout(0) << __func__ << " unknown op " << m->op << dendl;
+    assert(0);
+    break;
+  }
+}
+*/
+
+#if 0
+void Monitor::sync_start_chunks(MMonSync *m)
+{
+  MonitorDBStore::Synchronizer *synchronizer = store->get_synchronizer();
+  sync_send_chunk(m->get_source_inst());
+}
+
+/**
+ * We gotta figure out how this will deal with one or more monitors trying
+ * to synchronize, on different versions. Should we keep a map? And a
+ * lowest requested version? Allow trimming our state whenever we don't
+ * need some of the earliest versions? Is this overthinking it?
+ */
+// only on leader
+void Monitor::sync_trim_disable()
+{
+  assert(mon->is_leader());
+  dout(10) << __func__ << dendl;
+}
+
+// provider (old mon)
+void Monitor::handle_sync_start(MMonSync *m)
+{
+  dout(10) << __func__ << *m << dendl;
+
+  if (!mon->is_leader()) {
+    dout(10) << __func__
+	     <<" asking leader to disable trim; waiting for reply" << dendl;
+
+    MMonSync *m = MMonSync(MMonSync::OP_TRIM_DISABLE);
+    int leader = get_leader();
+    messenger->send_message(m, monmap->get_inst(leader));
+    return;
+  }
+
+  trim_disable();
+  sync_start_chunks(m);
+}
+
+// provider (old mon) && not the leader
+void Monitor::handle_sync_trim_disable_ack(MMonSync *m)
+{
+  assert(!mon->is_leader());
+  sync_start_chunks(m);
+}
+
+// leader-only
+void Monitor::handle_sync_trim_disable(MMonSync *m)
+{
+  assert(mon->is_leader());
+
+  trim_disable();
+
+  MMonSync *sm = new MMonSync(MMonSync::OP_TRIM_DISABLE_ACK);
+  sm->version = get_version();
+
+  messenger->send_message(sm, m->get_source_inst());
+  m->put();
+}
+#endif
 
 void Monitor::cancel_probe_timeout()
 {
@@ -1670,6 +2043,11 @@ bool Monitor::_ms_dispatch(Message *m)
 
     case MSG_MON_PROBE:
       handle_probe((MMonProbe*)m);
+      break;
+
+    // Sync (i.e., the new slurp, but on steroids)
+    case MSG_MON_SYNC:
+//      handle_sync((MMonSync*)m);
       break;
 
       // OSDs
