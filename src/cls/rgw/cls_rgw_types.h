@@ -302,4 +302,53 @@ struct rgw_user_bucket {
 };
 WRITE_CLASS_ENCODER(rgw_user_bucket)
 
+enum cls_rgw_gc_op {
+  CLS_RGW_GC_DEL_OBJ,
+  CLS_RGW_GC_DEL_BUCKET,
+};
+
+struct cls_rgw_obj {
+  string pool;
+  string oid;
+
+  cls_rgw_obj() {}
+  cls_rgw_obj(string& _p, string& _o) : pool(_p), oid(_o) {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(pool, bl);
+    ::encode(oid, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(pool, bl);
+    ::decode(oid, bl);
+    DECODE_FINISH(bl);
+  }
+};
+WRITE_CLASS_ENCODER(cls_rgw_obj)
+
+struct cls_rgw_obj_chain {
+  list<cls_rgw_obj> chain;
+
+  cls_rgw_obj_chain() {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(chain, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(chain, bl);
+    DECODE_FINISH(bl);
+  }
+};
+WRITE_CLASS_ENCODER(cls_rgw_obj_chain)
+
+
+
 #endif

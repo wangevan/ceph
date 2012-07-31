@@ -27,6 +27,7 @@ cls_method_handle_t h_rgw_dir_suggest_changes;
 cls_method_handle_t h_rgw_user_usage_log_add;
 cls_method_handle_t h_rgw_user_usage_log_read;
 cls_method_handle_t h_rgw_user_usage_log_trim;
+cls_method_handle_t h_rgw_gc_add_entry;
 
 
 #define ROUND_BLOCK_SIZE 4096
@@ -669,19 +670,104 @@ int rgw_user_usage_log_trim(cls_method_context_t hctx, bufferlist *in, bufferlis
   return 0;
 }
 
+#define GC_OBJ_NAME_INDEX 0
+#define GC_OBJ_TIME_INDEX 1
+
+static string[] gc_index_prefixes = { "0_",
+                                      "1_" };
+
+typedef struct {
+  utime_t time;
+  cls_rgw_obj_chain& chain;
+} gc_obj_info_t;
+
+static int rgw_cls_gc_omap_get(cls_method_context_t hctx, int type, string& val, gc_obj_info_t *info)
+{
+  string key = gc_index_prefixes[type];
+  key.append(val);
+
+  bufferlist bl;
+  int ret = cls_cxx_map_get_val(hctx, key, &bl);
+  if (ret < 0)
+    return ret;
+
+  try {
+    bufferlist::iterator iter = bl.begin();
+    ::decode(*info, iter);
+  } catch (buffer::error& err) {
+    CLS_LOG(0, "ERROR: rgw_cls_gc_omap_get(): failed to decode key=%s\n", key.c_str());
+  }
+
+  return 0;
+}
+
+static int rgw_cls_gc_del_obj(cls_method_context_t hctx, cls_rgw_obj_chain& chain)
+{
+  const string& name = chain.objs.front();
+  gc_obj_info_t info;
+  int r = rgw_cls_gc_omap_get(hctx, GC_OBJ_NAME_INDEX, name, &info);
+  if (r == -ENOENT)
+    return 0;
+  if (r < 0)
+    return r;
+
+  // now delete all indexes
+
+  return 0;
+}
+
+static int rgw_cls_gc_add_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+{
+  bufferlist::iterator in_iter = in->begin();
+  cls_rgw_gc_add_entry_op op;
+
+  try {
+    ::decode(op, in_iter);
+  } catch (buffer::error& err) {
+    CLS_LOG(1, "ERROR: rgw_cls_add(): failed to decode request\n");
+    return -EINVAL;
+  }
+
+  switch (op.op) {
+    case CLS_RGW_GC_DEL_OBJ:
+      {
+        cls_rgw_obj_chain chain;
+        bufferlist::iterator iter = op.begin();
+        try {
+          ::decode(chain, iter);
+        } catch (buffer::error& err) {
+          CLS_LOG(1, "ERROR: rgw_cls_add(): failed to decode entry\n");
+          return -EINVAL;
+        }
+        return rgw_cls_gc_del_obj(hctx, op.chain);
+      }
+    default:
+      return -ENOTSUP;
+  }
+
+  return 0;
+}
+
 void __cls_init()
 {
   CLS_LOG(1, "Loaded rgw class!");
 
   cls_register("rgw", &h_class);
+
+  /* bucket index */
   cls_register_cxx_method(h_class, "bucket_init_index", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_bucket_init_index, &h_rgw_bucket_init_index);
   cls_register_cxx_method(h_class, "bucket_list", CLS_METHOD_RD | CLS_METHOD_PUBLIC, rgw_bucket_list, &h_rgw_bucket_list);
   cls_register_cxx_method(h_class, "bucket_prepare_op", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_bucket_prepare_op, &h_rgw_bucket_prepare_op);
   cls_register_cxx_method(h_class, "bucket_complete_op", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_bucket_complete_op, &h_rgw_bucket_complete_op);
   cls_register_cxx_method(h_class, "dir_suggest_changes", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_dir_suggest_changes, &h_rgw_dir_suggest_changes);
+
+  /* usage logging */
   cls_register_cxx_method(h_class, "user_usage_log_add", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_user_usage_log_add, &h_rgw_user_usage_log_add);
   cls_register_cxx_method(h_class, "user_usage_log_read", CLS_METHOD_RD | CLS_METHOD_PUBLIC, rgw_user_usage_log_read, &h_rgw_user_usage_log_read);
   cls_register_cxx_method(h_class, "user_usage_log_trim", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_user_usage_log_trim, &h_rgw_user_usage_log_trim);
+
+  /* garbage collection */
+  cls_register_cxx_method(h_class, "gc_add_entry", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_cls_gc_add_entry, &h_rgw_gc_add_entry);
 
   return;
 }

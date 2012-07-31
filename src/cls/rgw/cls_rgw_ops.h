@@ -217,4 +217,53 @@ struct rgw_cls_usage_log_trim_op {
 };
 WRITE_CLASS_ENCODER(rgw_cls_usage_log_trim_op)
 
+struct cls_rgw_gc_obj_del_info
+{
+  cls_rgw_obj_chain chain;
+  utime_t time;
+
+  cls_rgw_gc_obj_del_info() {}
+
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(chain, bl);
+    ::encode(time, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(chain, bl);
+    ::decode(time, bl);
+    DECODE_FINISH(bl);
+  }
+};
+WRITE_CLASS_ENCODER(cls_rgw_gc_obj_del_info)
+
+struct cls_rgw_gc_add_entry_op {
+  cls_rgw_gc_op op;
+  bufferlist entry;
+
+  cls_rgw_gc_add_entry() {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    uint8_t o = (uint8_t)op;
+    ::encode(o, bl);
+    ::encode(entry, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    uint8_t o;
+    ::decode(o, bl);
+    op = (cls_rgw_gc_op)o;
+    ::decode(entry, bl);
+    DECODE_FINISH(bl);
+  }
+};
+WRITE_CLASS_ENCODER(cls_rgw_gc_add_entry_op)
+
 #endif
