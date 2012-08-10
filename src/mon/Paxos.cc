@@ -762,13 +762,8 @@ void Paxos::finish_proposal()
     return;
   }
 
-  int available_versions = (get_version() - get_first_committed());
-  int maximum_versions =
-    (g_conf->paxos_max_join_drift + g_conf->paxos_trim_tolerance);
-
-  if (!going_to_trim && (available_versions > maximum_versions)) {
+  if (should_trim()) {
     version_t trim_to_version = get_version() - g_conf->paxos_max_join_drift;
-
     trim_to(trim_to_version);
   }
 
