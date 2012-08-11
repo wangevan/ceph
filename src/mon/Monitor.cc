@@ -817,7 +817,7 @@ void Monitor::sync_stop()
 
   bootstrap();
 }
-/*
+
 void Monitor::handle_sync(MMonSync *m)
 {
   dout(10) << __func__ << " " << *m << dendl;
@@ -825,20 +825,23 @@ void Monitor::handle_sync(MMonSync *m)
   case MMonSync::OP_START:
     handle_sync_start(m);
     break;
+  case MMonSync::OP_START_REPLY:
+    handle_sync_start_reply(m);
+    break;
+  case MMonSync::OP_HEARTBEAT:
+    handle_sync_heartbeat(m);
+    break;
+  case MMonSync::OP_HEARTBEAT_REPLY:
+    handle_sync_heartbeat_reply(m);
+    break;
+  case MMonSync::OP_FINISH:
+    handle_sync_finish(m);
+    break;
   case MMonSync::OP_CHUNK:
     handle_sync_chunk(m);
     break;
-  case MMonSync::OP_CHUNK_ACK:
-    handle_sync_chunk_ack(m);
-    break;
-  case MMonSync::OP_TRIM_DISABLE:
-    handle_sync_trim_disable(m);
-    break;
-  case MMonSync::OP_TRIM_ENABLE:
-    handle_sync_trim_enable(m);
-    break;
-  case MMonSync::OP_TRIM_DISABLE_ACK:
-    handle_sync_trim_disable_ack(m);
+  case MMonSync::OP_CHUNK_REPLY:
+    handle_sync_chunk_reply(m);
     break;
   default:
     dout(0) << __func__ << " unknown op " << m->op << dendl;
@@ -846,7 +849,6 @@ void Monitor::handle_sync(MMonSync *m)
     break;
   }
 }
-*/
 
 #if 0
 void Monitor::sync_start_chunks(MMonSync *m)
@@ -2047,7 +2049,7 @@ bool Monitor::_ms_dispatch(Message *m)
 
     // Sync (i.e., the new slurp, but on steroids)
     case MSG_MON_SYNC:
-//      handle_sync((MMonSync*)m);
+      handle_sync((MMonSync*)m);
       break;
 
       // OSDs

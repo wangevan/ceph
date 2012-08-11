@@ -193,6 +193,7 @@ private:
    * @defgroup Synchronization
    * @{
    */
+  void handle_sync(MMonSync *m);
   /**
    * @defgroup Leader-specific
    * @{
