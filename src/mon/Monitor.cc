@@ -614,6 +614,8 @@ void Monitor::sync_send_heartbeat(entity_inst_t &other, bool reply)
 
 void Monitor::handle_sync_start(MMonSync *m)
 {
+  assert(is_leader());
+
   Mutex::Locker l(trim_lock);
   entity_inst_t other = m->get_source_inst();
   MMonSync *msg = new MMonSync(MMonSync::OP_START_REPLY);
@@ -632,6 +634,8 @@ void Monitor::handle_sync_start(MMonSync *m)
 
 void Monitor::handle_sync_heartbeat(MMonSync *m)
 {
+  assert(is_leader());
+
   entity_inst_t other = m->get_source_inst();
   if (trim_timeouts.count(other) == 0) {
     dout(5) << __func__ << " received heartbeat from " << other
@@ -649,6 +653,8 @@ void Monitor::handle_sync_heartbeat(MMonSync *m)
 
 void Monitor::sync_finish(entity_inst_t &entity)
 {
+  assert(is_leader());
+
   Mutex::Locker l(trim_lock);
 
   if (trim_timeouts.count(entity) > 0)
@@ -660,6 +666,8 @@ void Monitor::sync_finish(entity_inst_t &entity)
 
 void Monitor::handle_sync_finish(MMonSync *m)
 {
+  assert(is_leader());
+
   entity_inst_t other = m->get_source_inst();
   sync_finish(other);
   m->put();
