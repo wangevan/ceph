@@ -688,6 +688,14 @@ void Monitor::handle_sync_chunk_reply(MMonSync *m)
 {
   entity_inst_t other = m->get_source_inst();
   assert(sync_entities.count(other) > 0);
+
+  if (m->flags & MMonSync::FLAG_LAST) {
+    // they acked the last chunk. Clean up.
+    sync_entities.erase(other);
+    m->put();
+    return;
+  }
+
   sync_send_chunks(sync_entities[other], m->first_key, m->last_key);
   m->put();
 }
@@ -697,11 +705,17 @@ void Monitor::sync_send_chunks(SyncEntity sync,
 			       pair<string,string> &last_key)
 {
   sync->cancel_timeout();
+
+  MMonSync *msg = new MMonSync(MMonSync::OP_CHUNK);
+/*
+  bufferlist chunk;
+  sync->synchronizer.get_chunk(chunk, first_key, last_key);
+  if (!sync->synchronizer.has_next_chunk())
+    msg->flags |= MMonSync::FLAG_LAST;
+*/
   sync->set_timeout(new C_SyncTimeout(this, sync->entity),
 		    g_conf->mon_sync_timeout);
 
-  // Depending on MonitorDBStore's synchronizer implementation
-  MMonSync *msg = new MMonSync(MMonSync::OP_CHUNK);
   messenger->send_message(msg, sync->entity);
 }
 
@@ -795,6 +809,7 @@ void Monitor::handle_sync_chunk(MMonSync *m)
 
   if (!(m->flags & MMonSync::FLAG_LAST)) {
     MMonSync *msg = new MMonSync(MMonSync::OP_CHUNK_REPLY);
+    msg->flags |= MMonSync::FLAG_LAST;
     messenger->send_message(msg, sync_provider->entity);
   }
 
