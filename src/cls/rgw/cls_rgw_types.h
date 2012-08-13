@@ -331,19 +331,19 @@ struct cls_rgw_obj {
 WRITE_CLASS_ENCODER(cls_rgw_obj)
 
 struct cls_rgw_obj_chain {
-  list<cls_rgw_obj> chain;
+  list<cls_rgw_obj> objs;
 
   cls_rgw_obj_chain() {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
-    ::encode(chain, bl);
+    ::encode(objs, bl);
     ENCODE_FINISH(bl);
   }
 
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
-    ::decode(chain, bl);
+    ::decode(objs, bl);
     DECODE_FINISH(bl);
   }
 };

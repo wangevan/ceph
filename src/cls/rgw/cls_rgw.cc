@@ -673,21 +673,36 @@ int rgw_user_usage_log_trim(cls_method_context_t hctx, bufferlist *in, bufferlis
 #define GC_OBJ_NAME_INDEX 0
 #define GC_OBJ_TIME_INDEX 1
 
-static string[] gc_index_prefixes = { "0_",
+static string gc_index_prefixes[] = { "0_",
                                       "1_" };
 
 typedef struct {
   utime_t time;
-  cls_rgw_obj_chain& chain;
-} gc_obj_info_t;
+  cls_rgw_obj_chain chain;
 
-static int rgw_cls_gc_omap_get(cls_method_context_t hctx, int type, string& val, gc_obj_info_t *info)
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(time, bl);
+    ::encode(chain, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(time, bl);
+    ::decode(chain, bl);
+    DECODE_FINISH(bl);
+  }
+} gc_obj_info_t;
+WRITE_CLASS_ENCODER(gc_obj_info_t)
+
+static int rgw_cls_gc_omap_get(cls_method_context_t hctx, int type, const string& key, gc_obj_info_t *info)
 {
-  string key = gc_index_prefixes[type];
-  key.append(val);
+  string index = gc_index_prefixes[type];
+  index.append(key);
 
   bufferlist bl;
-  int ret = cls_cxx_map_get_val(hctx, key, &bl);
+  int ret = cls_cxx_map_get_val(hctx, index, &bl);
   if (ret < 0)
     return ret;
 
@@ -695,25 +710,59 @@ static int rgw_cls_gc_omap_get(cls_method_context_t hctx, int type, string& val,
     bufferlist::iterator iter = bl.begin();
     ::decode(*info, iter);
   } catch (buffer::error& err) {
-    CLS_LOG(0, "ERROR: rgw_cls_gc_omap_get(): failed to decode key=%s\n", key.c_str());
+    CLS_LOG(0, "ERROR: rgw_cls_gc_omap_get(): failed to decode index=%s\n", index.c_str());
   }
 
   return 0;
 }
 
-static int rgw_cls_gc_del_obj(cls_method_context_t hctx, cls_rgw_obj_chain& chain)
+static int rgw_cls_gc_omap_set(cls_method_context_t hctx, int type, const string& key, cls_rgw_gc_obj_del_info *info)
 {
-  const string& name = chain.objs.front();
-  gc_obj_info_t info;
-  int r = rgw_cls_gc_omap_get(hctx, GC_OBJ_NAME_INDEX, name, &info);
-  if (r == -ENOENT)
-    return 0;
-  if (r < 0)
-    return r;
+  bufferlist bl;
+  ::encode(*info, bl);
 
-  // now delete all indexes
+  string index = gc_index_prefixes[type];
+  index.append(key);
+
+  int ret = cls_cxx_map_set_val(hctx, index, &bl);
+  if (ret < 0)
+    return ret;
 
   return 0;
+}
+
+static int rgw_cls_gc_omap_remove(cls_method_context_t hctx, int type, const string& key)
+{
+  string index = gc_index_prefixes[type];
+  index.append(key);
+
+  bufferlist bl;
+  int ret = cls_cxx_map_remove_key(hctx, index);
+  if (ret < 0)
+    return ret;
+
+  return 0;
+}
+
+static int rgw_cls_gc_del_obj(cls_method_context_t hctx, cls_rgw_gc_obj_del_info& info)
+{
+  int ret = rgw_cls_gc_omap_set(hctx, GC_OBJ_NAME_INDEX, info.tag, &info);
+  if (ret < 0)
+    return ret;
+
+  char buf[32];
+  snprintf(buf, 32, "%lld.%d", (long long)info.time.sec(), info.time.nsec());
+  string key(buf);
+  ret = rgw_cls_gc_omap_set(hctx, GC_OBJ_TIME_INDEX, key, &info);
+  if (ret < 0)
+    goto done_err;
+
+  return 0;
+
+done_err:
+  CLS_LOG(0, "ERROR: rgw_cls_gc_del_obj error info.tag=%s, ret=%d\n", info.tag.c_str(), ret);
+  rgw_cls_gc_omap_remove(hctx, GC_OBJ_NAME_INDEX, info.tag);
+  return ret;
 }
 
 static int rgw_cls_gc_add_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
@@ -731,15 +780,15 @@ static int rgw_cls_gc_add_entry(cls_method_context_t hctx, bufferlist *in, buffe
   switch (op.op) {
     case CLS_RGW_GC_DEL_OBJ:
       {
-        cls_rgw_obj_chain chain;
-        bufferlist::iterator iter = op.begin();
+        cls_rgw_gc_obj_del_info info;
+        bufferlist::iterator iter = op.entry.begin();
         try {
-          ::decode(chain, iter);
+          ::decode(info, iter);
         } catch (buffer::error& err) {
           CLS_LOG(1, "ERROR: rgw_cls_add(): failed to decode entry\n");
           return -EINVAL;
         }
-        return rgw_cls_gc_del_obj(hctx, op.chain);
+        return rgw_cls_gc_del_obj(hctx, info);
       }
     default:
       return -ENOTSUP;

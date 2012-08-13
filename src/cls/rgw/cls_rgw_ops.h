@@ -219,6 +219,7 @@ WRITE_CLASS_ENCODER(rgw_cls_usage_log_trim_op)
 
 struct cls_rgw_gc_obj_del_info
 {
+  string tag;
   cls_rgw_obj_chain chain;
   utime_t time;
 
@@ -227,6 +228,7 @@ struct cls_rgw_gc_obj_del_info
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
+    ::encode(tag, bl);
     ::encode(chain, bl);
     ::encode(time, bl);
     ENCODE_FINISH(bl);
@@ -234,6 +236,7 @@ struct cls_rgw_gc_obj_del_info
 
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
+    ::decode(tag, bl);
     ::decode(chain, bl);
     ::decode(time, bl);
     DECODE_FINISH(bl);
@@ -245,7 +248,7 @@ struct cls_rgw_gc_add_entry_op {
   cls_rgw_gc_op op;
   bufferlist entry;
 
-  cls_rgw_gc_add_entry() {}
+  cls_rgw_gc_add_entry_op() {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
