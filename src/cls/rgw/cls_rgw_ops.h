@@ -217,13 +217,13 @@ struct rgw_cls_usage_log_trim_op {
 };
 WRITE_CLASS_ENCODER(rgw_cls_usage_log_trim_op)
 
-struct cls_rgw_gc_obj_del_info
+struct cls_rgw_gc_obj_info
 {
   string tag;
   cls_rgw_obj_chain chain;
   utime_t time;
 
-  cls_rgw_gc_obj_del_info() {}
+  cls_rgw_gc_obj_info() {}
 
 
   void encode(bufferlist& bl) const {
@@ -242,31 +242,69 @@ struct cls_rgw_gc_obj_del_info
     DECODE_FINISH(bl);
   }
 };
-WRITE_CLASS_ENCODER(cls_rgw_gc_obj_del_info)
+WRITE_CLASS_ENCODER(cls_rgw_gc_obj_info)
 
-struct cls_rgw_gc_add_entry_op {
-  cls_rgw_gc_op op;
-  bufferlist entry;
-
-  cls_rgw_gc_add_entry_op() {}
+struct cls_rgw_gc_set_entry_op {
+  cls_rgw_gc_obj_info info;
+  cls_rgw_gc_set_entry_op() {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
-    uint8_t o = (uint8_t)op;
-    ::encode(o, bl);
-    ::encode(entry, bl);
+    ::encode(info, bl);
     ENCODE_FINISH(bl);
   }
 
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
-    uint8_t o;
-    ::decode(o, bl);
-    op = (cls_rgw_gc_op)o;
-    ::decode(entry, bl);
+    ::decode(info, bl);
     DECODE_FINISH(bl);
   }
 };
-WRITE_CLASS_ENCODER(cls_rgw_gc_add_entry_op)
+WRITE_CLASS_ENCODER(cls_rgw_gc_set_entry_op)
+
+struct cls_rgw_gc_list_op {
+  string marker;
+  uint32_t max;
+
+  cls_rgw_gc_list_op() {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(marker, bl);
+    ::encode(max, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(marker, bl);
+    ::decode(max, bl);
+    DECODE_FINISH(bl);
+  }
+};
+WRITE_CLASS_ENCODER(cls_rgw_gc_list_op)
+
+struct cls_rgw_gc_list_ret {
+  list<cls_rgw_gc_obj_info> entries;
+  bool truncated;
+
+  cls_rgw_gc_list_ret() {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(entries, bl);
+    ::encode(truncated, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(entries, bl);
+    ::decode(truncated, bl);
+    DECODE_FINISH(bl);
+  }
+};
+WRITE_CLASS_ENCODER(cls_rgw_gc_list_ret)
+
 
 #endif
