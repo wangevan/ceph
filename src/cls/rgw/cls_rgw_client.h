@@ -30,7 +30,7 @@ void cls_rgw_usage_log_trim(librados::ObjectWriteOperation& op, string& user,
 void cls_rgw_usage_log_add(librados::ObjectWriteOperation& op, rgw_usage_log_info& info);
 
 /* garbage collection */
-void cls_rgw_gc_set_entry(librados::ObjectWriteOperation& op, cls_rgw_gc_obj_info& info);
+void cls_rgw_gc_set_entry(librados::ObjectWriteOperation& op, uint32_t expiration_secs, cls_rgw_gc_obj_info& info);
 
 int cls_rgw_gc_list(librados::IoCtx& io_ctx, string& oid, string& marker, uint32_t max,
                     list<cls_rgw_gc_obj_info>& entries, bool *truncated);

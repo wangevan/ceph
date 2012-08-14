@@ -40,10 +40,9 @@ void RGWGC::add_chain(ObjectWriteOperation& op, cls_rgw_obj_chain& chain, const 
 {
   cls_rgw_gc_obj_info info;
   info.chain = chain;
-  info.time = utime_t(cct->_conf->rgw_gc_obj_min_wait, 0);
   info.tag = tag;
 
-  cls_rgw_gc_set_entry(op, info);
+  cls_rgw_gc_set_entry(op, cct->_conf->rgw_gc_obj_min_wait, info);
 }
 
 int RGWGC::send_chain(cls_rgw_obj_chain& chain, const string& tag)

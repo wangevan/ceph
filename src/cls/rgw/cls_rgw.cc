@@ -732,7 +732,7 @@ void get_time_key(utime_t& ut, string& key)
   key = buf;
 }
 
-static int gc_update_entry(cls_method_context_t hctx, cls_rgw_gc_obj_info& info)
+static int gc_update_entry(cls_method_context_t hctx, uint32_t expiration_secs, cls_rgw_gc_obj_info& info)
 {
   cls_rgw_gc_obj_info old_info;
   int ret = gc_omap_get(hctx, GC_OBJ_NAME_INDEX, info.tag, &old_info);
@@ -745,6 +745,8 @@ static int gc_update_entry(cls_method_context_t hctx, cls_rgw_gc_obj_info& info)
       return ret;
     }
   }
+  info.time = ceph_clock_now(g_ceph_context);
+  info.time += expiration_secs;
   ret = gc_omap_set(hctx, GC_OBJ_NAME_INDEX, info.tag, &info);
   if (ret < 0)
     return ret;
@@ -786,7 +788,8 @@ static int rgw_cls_gc_set_entry(cls_method_context_t hctx, bufferlist *in, buffe
     CLS_LOG(1, "ERROR: rgw_cls_gc_set_entry(): failed to decode entry\n");
     return -EINVAL;
   }
-  return gc_update_entry(hctx, op.info);
+
+  return gc_update_entry(hctx, op.expiration_secs, op.info);
 }
 
 static int gc_iterate_entries(cls_method_context_t hctx, int type, const string& marker,
@@ -797,7 +800,7 @@ static int gc_iterate_entries(cls_method_context_t hctx, int type, const string&
   CLS_LOG(10, "gc_iterate_range");
 
   map<string, bufferlist> keys;
-  string filter_prefix;
+  string filter_prefix, end_key;
   uint32_t i = 0;
   string key;
 
@@ -813,6 +816,9 @@ static int gc_iterate_entries(cls_method_context_t hctx, int type, const string&
   } else {
     start_key = key_iter;
   }
+
+  utime_t now = ceph_clock_now(g_ceph_context);
+  get_time_key(now, end_key);
 
   string filter;
 
@@ -831,6 +837,9 @@ static int gc_iterate_entries(cls_method_context_t hctx, int type, const string&
     for (; iter != keys.end(); ++iter) {
       const string& key = iter->first;
       cls_rgw_gc_obj_info e;
+
+      if (key.compare(end_key) >= 0)
+        return 0;
 
       if (key.compare(0, index_prefix.size(), index_prefix) != 0)
         return 0;
