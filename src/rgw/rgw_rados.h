@@ -10,6 +10,7 @@
 class RGWWatcher;
 class SafeTimer;
 class ACLOwner;
+class RGWGC;
 
 static inline void prepend_bucket_marker(rgw_bucket& bucket, string& orig_oid, string& oid)
 {
@@ -199,6 +200,7 @@ class RGWRados
 {
   /** Open the pool used as root for this gateway */
   int open_root_pool_ctx();
+  int open_gc_pool_ctx();
 
   int open_bucket_ctx(rgw_bucket& bucket, librados::IoCtx&  io_ctx);
 
@@ -223,10 +225,13 @@ class RGWRados
     }
   };
 
+  RGWGC *gc;
+
 
   RGWWatcher *watcher;
   uint64_t watch_handle;
   librados::IoCtx root_pool_ctx;      // .rgw
+  librados::IoCtx gc_pool_ctx;        // .rgw.gc
   librados::IoCtx control_pool_ctx;   // .rgw.control
 
   Mutex bucket_id_lock;
@@ -270,7 +275,7 @@ class RGWRados
     return clone_objs(ctx, dst_obj, v, attrs, category, pmtime, true, false);
   }
   int delete_obj_impl(void *ctx, rgw_obj& src_obj, bool sync);
-  int complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& obj);
+  int complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& obj, const string& tag);
 
   int update_placement_map();
   int select_bucket_placement(std::string& bucket_name, rgw_bucket& bucket);
@@ -280,7 +285,7 @@ protected:
   CephContext *cct;
 
 public:
-  RGWRados() : lock("rados_timer_lock"), timer(NULL), watcher(NULL), watch_handle(0),
+  RGWRados() : lock("rados_timer_lock"), timer(NULL), gc(NULL), watcher(NULL), watch_handle(0),
                bucket_id_lock("rados_bucket_id"), max_bucket_id(0) {}
   virtual ~RGWRados() {}
 
@@ -583,6 +588,9 @@ public:
   /// clean up/process any temporary objects older than given date[/time]
   int remove_temp_objects(string date, string time);
 
+  int gc_operate(string& oid, librados::ObjectWriteOperation *op);
+  int gc_operate(string& oid, librados::ObjectReadOperation *op, bufferlist *pbl);
+
  private:
   int process_intent_log(rgw_bucket& bucket, string& oid,
 			 time_t epoch, int flags, bool purge);
@@ -631,6 +639,7 @@ public:
 
   uint64_t instance_id();
   uint64_t next_bucket_id();
+
 };
 
 class RGWStoreManager {

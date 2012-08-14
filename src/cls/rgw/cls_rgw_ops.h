@@ -217,33 +217,6 @@ struct rgw_cls_usage_log_trim_op {
 };
 WRITE_CLASS_ENCODER(rgw_cls_usage_log_trim_op)
 
-struct cls_rgw_gc_obj_info
-{
-  string tag;
-  cls_rgw_obj_chain chain;
-  utime_t time;
-
-  cls_rgw_gc_obj_info() {}
-
-
-  void encode(bufferlist& bl) const {
-    ENCODE_START(1, 1, bl);
-    ::encode(tag, bl);
-    ::encode(chain, bl);
-    ::encode(time, bl);
-    ENCODE_FINISH(bl);
-  }
-
-  void decode(bufferlist::iterator& bl) {
-    DECODE_START(1, bl);
-    ::decode(tag, bl);
-    ::decode(chain, bl);
-    ::decode(time, bl);
-    DECODE_FINISH(bl);
-  }
-};
-WRITE_CLASS_ENCODER(cls_rgw_gc_obj_info)
-
 struct cls_rgw_gc_set_entry_op {
   cls_rgw_gc_obj_info info;
   cls_rgw_gc_set_entry_op() {}

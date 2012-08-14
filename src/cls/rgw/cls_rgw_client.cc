@@ -144,3 +144,42 @@ void cls_rgw_usage_log_add(ObjectWriteOperation& op, rgw_usage_log_info& info)
   op.exec("rgw", "user_usage_log_add", in);
 }
 
+/* garbage collection */
+
+void cls_rgw_gc_set_entry(ObjectWriteOperation& op, cls_rgw_gc_obj_info& info)
+{
+  bufferlist in;
+  cls_rgw_gc_set_entry_op call;
+  call.info = info;
+  ::encode(call, in);
+  op.exec("rgw", "gc_set_entry", in);
+}
+
+int cls_rgw_gc_list(IoCtx& io_ctx, string& oid, string& marker, uint32_t max,
+                    list<cls_rgw_gc_obj_info>& entries, bool *truncated)
+{
+  bufferlist in, out;
+  cls_rgw_gc_list_op call;
+  call.marker = marker;
+  call.max = max;
+  ::encode(call, in);
+  int r = io_ctx.exec(oid, "rgw", "gc_list", in, out);
+  if (r < 0)
+    return r;
+
+  cls_rgw_gc_list_ret ret;
+  try {
+    bufferlist::iterator iter = out.begin();
+    ::decode(ret, iter);
+  } catch (buffer::error& err) {
+    return -EIO;
+  }
+
+  entries = ret.entries;
+
+  if (truncated)
+    *truncated = ret.truncated;
+
+ return r;
+}
+

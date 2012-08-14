@@ -423,6 +423,8 @@ OPTION(rgw_intent_log_object_name, OPT_STR, "%Y-%m-%d-%i-%n")  // man date to se
 OPTION(rgw_intent_log_object_name_utc, OPT_BOOL, false)
 OPTION(rgw_init_timeout, OPT_INT, 30) // time in seconds
 OPTION(rgw_mime_types_file, OPT_STR, "/etc/mime.types")
+OPTION(rgw_gc_max_objs, OPT_INT, 16)
+OPTION(rgw_gc_obj_min_wait, OPT_INT, 60)    // wait time before object may be handled by gc
 
 // This will be set to true when it is safe to start threads.
 // Once it is true, it will never change.

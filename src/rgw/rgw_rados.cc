@@ -27,6 +27,8 @@ using namespace librados;
 
 #include "rgw_log.h"
 
+#include "rgw_gc.h"
+
 #define dout_subsys ceph_subsys_rgw
 
 using namespace std;
@@ -116,6 +118,13 @@ int RGWRados::initialize()
   if (ret < 0)
     return ret;
 
+  ret = open_gc_pool_ctx();
+  if (ret < 0)
+    return ret;
+
+  gc = new RGWGC();
+  gc->initialize(cct, this);
+
   return ret;
 }
 
@@ -139,6 +148,22 @@ int RGWRados::open_root_pool_ctx()
       return r;
 
     r = rados->ioctx_create(RGW_ROOT_BUCKET, root_pool_ctx);
+  }
+
+  return r;
+}
+
+int RGWRados::open_gc_pool_ctx()
+{
+  int r = rados->ioctx_create(RGW_GC_BUCKET, gc_pool_ctx);
+  if (r == -ENOENT) {
+    r = rados->pool_create(RGW_GC_BUCKET);
+    if (r == -EEXIST)
+      r = 0;
+    if (r < 0)
+      return r;
+
+    r = rados->ioctx_create(RGW_GC_BUCKET, gc_pool_ctx);
   }
 
   return r;
@@ -936,7 +961,7 @@ int RGWRados::put_obj_meta(void *ctx, rgw_obj& obj,  uint64_t size,
 
   epoch = io_ctx.get_last_version();
 
-  r = complete_atomic_overwrite(rctx, state, obj);
+  r = complete_atomic_overwrite(rctx, state, obj, tag);
   if (r < 0) {
     ldout(cct, 0) << "ERROR: complete_atomic_overwrite returned r=" << r << dendl;
   }
@@ -1243,22 +1268,26 @@ int RGWRados::bucket_suspended(rgw_bucket& bucket, bool *suspended)
   return 0;
 }
 
-int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& obj)
+int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& obj, const string& tag)
 {
   if (!state || !state->has_manifest)
     return 0;
 
+  cls_rgw_obj_chain chain;
   map<uint64_t, RGWObjManifestPart>::iterator iter;
   for (iter = state->manifest.objs.begin(); iter != state->manifest.objs.end(); ++iter) {
     rgw_obj& mobj = iter->second.loc;
     if (mobj == obj)
       continue;
-    int ret = rctx->notify_intent(mobj, DEL_OBJ);
-    if (ret < 0) {
-      ldout(cct, 0) << "WARNING: failed to log intent ret=" << ret << dendl;
-    }
+    string oid, key;
+    rgw_bucket bucket;
+    get_obj_bucket_and_oid_key(mobj, bucket, oid, key);
+    chain.push_obj(bucket.pool, oid, key);
   }
-  return 0;
+
+  int ret = gc->send_chain(chain, tag);
+
+  return ret;
 }
 
 /**
@@ -1308,7 +1337,7 @@ int RGWRados::delete_obj_impl(void *ctx, rgw_obj& obj, bool sync)
       }
     }
     if (removed) {
-      int ret = complete_atomic_overwrite(rctx, state, obj);
+      int ret = complete_atomic_overwrite(rctx, state, obj, tag);
       if (ret < 0) {
         ldout(cct, 0) << "ERROR: complete_atomic_removal returned ret=" << ret << dendl;
       }
@@ -2480,6 +2509,16 @@ int RGWRados::pool_iterate(RGWPoolIterCtx& ctx, uint32_t num, vector<RGWObjEnt>&
     *is_truncated = (iter != io_ctx.objects_end());
 
   return objs.size();
+}
+
+int RGWRados::gc_operate(string& oid, librados::ObjectWriteOperation *op)
+{
+  return gc_pool_ctx.operate(oid, op);
+}
+
+int RGWRados::gc_operate(string& oid, librados::ObjectReadOperation *op, bufferlist *pbl)
+{
+  return gc_pool_ctx.operate(oid, op, pbl);
 }
 
 int RGWRados::cls_rgw_init_index(librados::IoCtx& io_ctx, librados::ObjectWriteOperation& op, string& oid)
