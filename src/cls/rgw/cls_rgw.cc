@@ -728,7 +728,7 @@ static int gc_omap_remove(cls_method_context_t hctx, int type, const string& key
 void get_time_key(utime_t& ut, string& key)
 {
   char buf[32];
-  snprintf(buf, 32, "%lld.%d", (long long)ut.sec(), ut.nsec());
+  snprintf(buf, 32, "%011lld.%d", (long long)ut.sec(), ut.nsec());
   key = buf;
 }
 
@@ -792,7 +792,7 @@ static int rgw_cls_gc_set_entry(cls_method_context_t hctx, bufferlist *in, buffe
   return gc_update_entry(hctx, op.expiration_secs, op.info);
 }
 
-static int gc_iterate_entries(cls_method_context_t hctx, int type, const string& marker,
+static int gc_iterate_entries(cls_method_context_t hctx, const string& marker,
                               string& key_iter, uint32_t max_entries, bool *truncated,
                               int (*cb)(cls_method_context_t, const string&, cls_rgw_gc_obj_info&, void *),
                               void *param)
@@ -807,7 +807,7 @@ static int gc_iterate_entries(cls_method_context_t hctx, int type, const string&
   if (truncated)
     *truncated = false;
 
-  string& index_prefix = gc_index_prefixes[type];
+  string& index_prefix = gc_index_prefixes[GC_OBJ_TIME_INDEX];
 
   string start_key;
   if (key_iter.empty()) {
@@ -818,7 +818,12 @@ static int gc_iterate_entries(cls_method_context_t hctx, int type, const string&
   }
 
   utime_t now = ceph_clock_now(g_ceph_context);
-  get_time_key(now, end_key);
+  string now_str;
+  get_time_key(now, now_str);
+  end_key = gc_index_prefixes[GC_OBJ_TIME_INDEX];
+  end_key.append(now_str);
+
+  CLS_LOG(0, "gc_iterate_entries end_key=%s\n", end_key.c_str());
 
   string filter;
 
@@ -837,6 +842,8 @@ static int gc_iterate_entries(cls_method_context_t hctx, int type, const string&
     for (; iter != keys.end(); ++iter) {
       const string& key = iter->first;
       cls_rgw_gc_obj_info e;
+
+      CLS_LOG(0, "gc_iterate_entries key=%s\n", key.c_str());
 
       if (key.compare(end_key) >= 0)
         return 0;
@@ -876,7 +883,7 @@ static int gc_list_entries(cls_method_context_t hctx, const string& marker,
 			   uint32_t max, list<cls_rgw_gc_obj_info>& entries, bool *truncated)
 {
   string key_iter;
-  int ret = gc_iterate_entries(hctx, GC_OBJ_TIME_INDEX, marker,
+  int ret = gc_iterate_entries(hctx, marker,
                               key_iter, max, truncated,
                               gc_list_cb, &entries);
   return ret;
