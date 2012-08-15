@@ -198,6 +198,8 @@ struct RGWPoolIterCtx {
   
 class RGWRados
 {
+  friend class RGWGC;
+
   /** Open the pool used as root for this gateway */
   int open_root_pool_ctx();
   int open_gc_pool_ctx();
@@ -231,7 +233,6 @@ class RGWRados
   RGWWatcher *watcher;
   uint64_t watch_handle;
   librados::IoCtx root_pool_ctx;      // .rgw
-  librados::IoCtx gc_pool_ctx;        // .rgw.gc
   librados::IoCtx control_pool_ctx;   // .rgw.control
 
   Mutex bucket_id_lock;
@@ -283,6 +284,7 @@ class RGWRados
 
 protected:
   CephContext *cct;
+  librados::IoCtx gc_pool_ctx;        // .rgw.gc
 
 public:
   RGWRados() : lock("rados_timer_lock"), timer(NULL), gc(NULL), watcher(NULL), watch_handle(0),
@@ -591,6 +593,7 @@ public:
   int gc_operate(string& oid, librados::ObjectWriteOperation *op);
   int gc_operate(string& oid, librados::ObjectReadOperation *op, bufferlist *pbl);
 
+  int list_gc_objs(int *index, string& marker, uint32_t max, std::list<cls_rgw_gc_obj_info>& result, bool *truncated);
  private:
   int process_intent_log(rgw_bucket& bucket, string& oid,
 			 time_t epoch, int flags, bool purge);
