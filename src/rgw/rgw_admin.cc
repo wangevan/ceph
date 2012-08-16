@@ -59,6 +59,7 @@ void _usage()
   cerr << "  temp remove                remove temporary objects that were created up to\n";
   cerr << "                             specified date (and optional time)\n";
   cerr << "  gc list                    dump expired garbage collection objects\n";
+  cerr << "  gc process                 manually process garbage\n";
   cerr << "options:\n";
   cerr << "   --uid=<id>                user id\n";
   cerr << "   --auth-uid=<auid>         librados uid\n";
@@ -136,6 +137,7 @@ enum {
   OPT_USAGE_TRIM,
   OPT_TEMP_REMOVE,
   OPT_GC_LIST,
+  OPT_GC_PROCESS,
 };
 
 static uint32_t str_to_perm(const char *str)
@@ -282,6 +284,8 @@ static int get_cmd(const char *cmd, const char *prev_cmd, bool *need_more)
   } else if (strcmp(prev_cmd, "gc") == 0) {
     if (strcmp(cmd, "list") == 0)
       return OPT_GC_LIST;
+    if (strcmp(cmd, "process") == 0)
+      return OPT_GC_PROCESS;
   }
 
   return -EINVAL;
@@ -1542,5 +1546,12 @@ next:
     formatter->flush(cout);
   }
 
+  if (opt_cmd == OPT_GC_PROCESS) {
+    int ret = rgwstore->process_gc();
+    if (ret < 0) {
+      cerr << "ERROR: gc processing returned error: " << cpp_strerror(-ret) << std::endl;
+      return 1;
+    }
+  }
   return 0;
 }

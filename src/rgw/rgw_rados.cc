@@ -2524,6 +2524,11 @@ int RGWRados::list_gc_objs(int *index, string& marker, uint32_t max, std::list<c
   return gc->list(index, marker, max, result, truncated);
 }
 
+int RGWRados::process_gc()
+{
+  return gc->process();
+}
+
 int RGWRados::cls_rgw_init_index(librados::IoCtx& io_ctx, librados::ObjectWriteOperation& op, string& oid)
 {
   bufferlist in;

@@ -4,6 +4,7 @@
 #include "include/rados/librados.hpp"
 #include "cls/rgw/cls_rgw_client.h"
 #include "cls/lock/cls_lock_client.h"
+#include "auth/Crypto.h"
 
 #include <list>
 
@@ -102,10 +103,21 @@ int RGWGC::process(int index, int max_secs)
 {
   rados::cls::lock::Lock l(gc_index_lock_name);
   utime_t end = ceph_clock_now(g_ceph_context);
+
+  /* max_secs should be greater than zero. We don't want a zero max_secs
+   * to be translated as no timeout, since we'd then need to break the
+   * lock and that would require a manual intervention. In this case
+   * we can just wait it out. */
+  if (max_secs <= 0)
+    return -EAGAIN;
+
   end += max_secs;
   utime_t time(max_secs, 0);
   l.set_duration(time);
+
   int ret = l.lock_exclusive(store->gc_pool_ctx, obj_names[index]);
+  if (ret == -EEXIST) /* already locked by another gc processor */
+    return 0;
   if (ret < 0)
     return ret;
 
@@ -154,16 +166,40 @@ int RGWGC::process(int index, int max_secs)
         ctx->locator_set_key(obj.key);
 	dout(0) << "gc::process: removing " << obj.pool << ":" << obj.oid << dendl;
         ret = ctx->remove(obj.oid);
+	if (ret == -ENOENT)
+	  ret = 0;
         if (ret < 0) {
           dout(0) << "failed to remove " << obj.pool << ":" << obj.oid << "@" << obj.key << dendl;
         }
+	if (!ret) {
+	}
       }
     }
-  } while (!truncated);
+  } while (truncated);
 
 done:
   l.unlock(store->gc_pool_ctx, obj_names[index]);
   delete ctx;
+  return 0;
+}
+
+int RGWGC::process()
+{
+  int max_objs = cct->_conf->rgw_gc_max_objs;
+  int max_secs = cct->_conf->rgw_gc_processor_max_time;
+
+  unsigned start;
+  int ret = get_random_bytes((char *)&start, sizeof(start));
+  if (ret < 0)
+    return ret;
+
+  for (int i = 0; i < max_objs; i++) {
+    int index = (i + start) % max_objs;
+    ret = process(index, max_secs);
+    if (ret < 0)
+      return ret;
+  }
+
   return 0;
 }
 
