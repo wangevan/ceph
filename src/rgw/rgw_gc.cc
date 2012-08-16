@@ -124,8 +124,10 @@ int RGWGC::process(int index, int max_secs)
   l.set_duration(time);
 
   int ret = l.lock_exclusive(store->gc_pool_ctx, obj_names[index]);
-  if (ret == -EEXIST) /* already locked by another gc processor */
+  if (ret == -EBUSY) { /* already locked by another gc processor */
+    dout(0) << "RGWGC::process() failed to acquire lock on " << obj_names[index] << dendl;
     return 0;
+  }
   if (ret < 0)
     return ret;
 
