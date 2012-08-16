@@ -733,10 +733,13 @@ void get_time_key(utime_t& ut, string& key)
   key = buf;
 }
 
-static int gc_update_entry(cls_method_context_t hctx, uint32_t expiration_secs, cls_rgw_gc_obj_info& info)
+static int gc_update_entry(cls_method_context_t hctx, uint32_t expiration_secs,
+                           cls_rgw_gc_obj_info& info, bool create)
 {
   cls_rgw_gc_obj_info old_info;
   int ret = gc_omap_get(hctx, GC_OBJ_NAME_INDEX, info.tag, &old_info);
+  if (ret == -ENOENT && !create)
+    return 0;
   if (ret == 0) {
     string key;
     get_time_key(old_info.time, key);
@@ -790,7 +793,7 @@ static int rgw_cls_gc_set_entry(cls_method_context_t hctx, bufferlist *in, buffe
     return -EINVAL;
   }
 
-  return gc_update_entry(hctx, op.expiration_secs, op.info);
+  return gc_update_entry(hctx, op.expiration_secs, op.info, op.create);
 }
 
 static int gc_iterate_entries(cls_method_context_t hctx, const string& marker,

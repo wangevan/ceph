@@ -1283,7 +1283,7 @@ int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, r
     chain.push_obj(bucket.pool, oid, key);
   }
 
-  int ret = gc->send_chain(chain, tag);
+  int ret = gc->send_chain(chain, tag, true);
 
   return ret;
 }

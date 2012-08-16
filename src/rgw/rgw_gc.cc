@@ -43,19 +43,19 @@ int RGWGC::tag_index(const string& tag)
   return ceph_str_hash_linux(tag.c_str(), tag.size()) % max_objs;
 }
 
-void RGWGC::add_chain(ObjectWriteOperation& op, cls_rgw_obj_chain& chain, const string& tag)
+void RGWGC::add_chain(ObjectWriteOperation& op, cls_rgw_obj_chain& chain, const string& tag, bool create)
 {
   cls_rgw_gc_obj_info info;
   info.chain = chain;
   info.tag = tag;
 
-  cls_rgw_gc_set_entry(op, cct->_conf->rgw_gc_obj_min_wait, info);
+  cls_rgw_gc_set_entry(op, cct->_conf->rgw_gc_obj_min_wait, info, create);
 }
 
-int RGWGC::send_chain(cls_rgw_obj_chain& chain, const string& tag)
+int RGWGC::send_chain(cls_rgw_obj_chain& chain, const string& tag, bool create)
 {
   ObjectWriteOperation op;
-  add_chain(op, chain, tag);
+  add_chain(op, chain, tag, create);
 
   int i = tag_index(tag);
 
