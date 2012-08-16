@@ -189,6 +189,9 @@ int RGWGC::process(int index, int max_secs)
             remove_tags.clear();
           }
 	}
+
+        if (going_down())
+          goto done;
       }
     }
   } while (truncated);
@@ -219,5 +222,58 @@ int RGWGC::process()
   }
 
   return 0;
+}
+
+bool RGWGC::going_down()
+{
+  return (down_flag.read() != 0);
+}
+
+void RGWGC::start_processor()
+{
+  worker = new GCWorker(cct, this);
+  worker->create();
+}
+
+void RGWGC::stop_processor()
+{
+  down_flag.set(1);
+  if (worker) {
+    worker->stop();
+    worker->join();
+  }
+  delete worker;
+  worker = NULL;
+}
+
+void *RGWGC::GCWorker::entry() {
+  do {
+    utime_t start = ceph_clock_now(cct);
+    int r = gc->process();
+    if (r < 0) {
+      dout(0) << "ERROR: garbage collection process() returned error r=" << r << dendl;
+    }
+
+    if (gc->going_down())
+      break;
+
+    utime_t end = ceph_clock_now(cct);
+    end -= start;
+    int secs = cct->_conf->rgw_gc_processor_period;
+
+    if (secs >= end.sec())
+      continue; // next round
+    lock.Lock();
+    cond.WaitInterval(cct, lock, utime_t(secs, 0));
+    lock.Unlock();
+  } while (!gc->going_down());
+
+  return NULL;
+}
+
+void RGWGC::GCWorker::stop()
+{
+  Mutex::Locker l(lock);
+  cond.Signal();
 }
 
