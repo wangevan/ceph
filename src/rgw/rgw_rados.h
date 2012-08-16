@@ -284,11 +284,12 @@ class RGWRados
 
 protected:
   CephContext *cct;
+  librados::Rados *rados;
   librados::IoCtx gc_pool_ctx;        // .rgw.gc
 
 public:
   RGWRados() : lock("rados_timer_lock"), timer(NULL), gc(NULL), watcher(NULL), watch_handle(0),
-               bucket_id_lock("rados_bucket_id"), max_bucket_id(0) {}
+               bucket_id_lock("rados_bucket_id"), max_bucket_id(0), rados(NULL) {}
   virtual ~RGWRados() {}
 
   void tick();

@@ -33,8 +33,6 @@ using namespace librados;
 
 using namespace std;
 
-Rados *rados = NULL;
-
 static RGWCache<RGWRados> cached_rados_provider;
 static RGWRados rados_provider;
 

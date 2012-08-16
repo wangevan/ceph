@@ -3,14 +3,17 @@
 #include "rgw_gc.h"
 #include "include/rados/librados.hpp"
 #include "cls/rgw/cls_rgw_client.h"
+#include "cls/lock/cls_lock_client.h"
 
 #include <list>
 
+#define dout_subsys ceph_subsys_rgw
 
 using namespace std;
 using namespace librados;
 
 static string gc_oid_prefix = "gc";
+static string gc_index_lock_name = "gc_process";
 
 void RGWGC::initialize(CephContext *_cct, RGWRados *_store) {
   cct = _cct;
@@ -92,6 +95,75 @@ int RGWGC::list(int *index, string& marker, uint32_t max, std::list<cls_rgw_gc_o
   }
   *truncated = false;
 
+  return 0;
+}
+
+int RGWGC::process(int index, int max_secs)
+{
+  rados::cls::lock::Lock l(gc_index_lock_name);
+  utime_t end = ceph_clock_now(g_ceph_context);
+  end += max_secs;
+  utime_t time(max_secs, 0);
+  l.set_duration(time);
+  int ret = l.lock_exclusive(store->gc_pool_ctx, obj_names[index]);
+  if (ret < 0)
+    return ret;
+
+  string marker;
+  bool truncated;
+  IoCtx *ctx = NULL;
+  do {
+    int max = 100;
+    std::list<cls_rgw_gc_obj_info> entries;
+    ret = cls_rgw_gc_list(store->gc_pool_ctx, obj_names[index], marker, max, entries, &truncated);
+    if (ret == -ENOENT) {
+      ret = 0;
+      goto done;
+    }
+    if (ret < 0)
+      goto done;
+
+    string last_pool;
+    ctx = new IoCtx;
+    std::list<cls_rgw_gc_obj_info>::iterator iter;
+    for (iter = entries.begin(); iter != entries.end(); ++iter) {
+      cls_rgw_gc_obj_info& info = *iter;
+      std::list<cls_rgw_obj>::iterator liter;
+      cls_rgw_obj_chain& chain = info.chain;
+
+      utime_t now = ceph_clock_now(g_ceph_context);
+      if (now >= end)
+        goto done;
+
+      for (liter = chain.objs.begin(); liter != chain.objs.end(); ++liter) {
+        cls_rgw_obj& obj = *liter;
+
+        if (obj.pool != last_pool) {
+          if (ctx) {
+            delete ctx;
+            ctx = new IoCtx;
+          }
+	  ret = rgwstore->rados->ioctx_create(obj.pool.c_str(), *ctx);
+	  if (ret < 0) {
+	    dout(0) << "ERROR: failed to create ioctx pool=" << obj.pool << dendl;
+	    continue;
+	  }
+          last_pool = obj.pool;
+        }
+
+        ctx->locator_set_key(obj.key);
+	dout(0) << "gc::process: removing " << obj.pool << ":" << obj.oid << dendl;
+        ret = ctx->remove(obj.oid);
+        if (ret < 0) {
+          dout(0) << "failed to remove " << obj.pool << ":" << obj.oid << "@" << obj.key << dendl;
+        }
+      }
+    }
+  } while (!truncated);
+
+done:
+  l.unlock(store->gc_pool_ctx, obj_names[index]);
+  delete ctx;
   return 0;
 }
 

@@ -26,6 +26,7 @@ public:
 
   int list(int *index, string& marker, uint32_t max, std::list<cls_rgw_gc_obj_info>& result, bool *truncated);
   void list_init(int *index) { *index = 0; }
+  int process(int index, int process_max_secs);
 };
 
 
