@@ -184,3 +184,11 @@ int cls_rgw_gc_list(IoCtx& io_ctx, string& oid, string& marker, uint32_t max,
  return r;
 }
 
+void cls_rgw_gc_remove(librados::ObjectWriteOperation& op, const list<string>& tags)
+{
+  bufferlist in;
+  cls_rgw_gc_remove_op call;
+  call.tags = tags;
+  ::encode(call, in);
+  op.exec("rgw", "gc_remove", in);
+}

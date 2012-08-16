@@ -282,5 +282,24 @@ struct cls_rgw_gc_list_ret {
 };
 WRITE_CLASS_ENCODER(cls_rgw_gc_list_ret)
 
+struct cls_rgw_gc_remove_op {
+  list<string> tags;
+
+  cls_rgw_gc_remove_op() {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(tags, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(tags, bl);
+    DECODE_FINISH(bl);
+  }
+};
+WRITE_CLASS_ENCODER(cls_rgw_gc_remove_op)
+
 
 #endif

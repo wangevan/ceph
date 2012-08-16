@@ -20,6 +20,7 @@ public:
 
   void add_chain(librados::ObjectWriteOperation& op, cls_rgw_obj_chain& chain, const string& tag);
   int send_chain(cls_rgw_obj_chain& chain, const string& tag);
+  int remove(int index, const std::list<string>& tags);
 
   void initialize(CephContext *_cct, RGWRados *_store);
   void finalize();

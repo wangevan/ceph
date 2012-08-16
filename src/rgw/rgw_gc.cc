@@ -62,6 +62,13 @@ int RGWGC::send_chain(cls_rgw_obj_chain& chain, const string& tag)
   return store->gc_operate(obj_names[i], &op);
 }
 
+int RGWGC::remove(int index, const std::list<string>& tags)
+{
+  ObjectWriteOperation op;
+  cls_rgw_gc_remove(op, tags);
+  return store->gc_operate(obj_names[index], &op);
+}
+
 int RGWGC::list(int *index, string& marker, uint32_t max, std::list<cls_rgw_gc_obj_info>& result, bool *truncated)
 {
   result.clear();
@@ -103,6 +110,7 @@ int RGWGC::process(int index, int max_secs)
 {
   rados::cls::lock::Lock l(gc_index_lock_name);
   utime_t end = ceph_clock_now(g_ceph_context);
+  std::list<string> remove_tags;
 
   /* max_secs should be greater than zero. We don't want a zero max_secs
    * to be translated as no timeout, since we'd then need to break the
@@ -172,12 +180,20 @@ int RGWGC::process(int index, int max_secs)
           dout(0) << "failed to remove " << obj.pool << ":" << obj.oid << "@" << obj.key << dendl;
         }
 	if (!ret) {
+          remove_tags.push_back(info.tag);
+#define MAX_REMOVE_CHUNK 16
+          if (remove_tags.size() > MAX_REMOVE_CHUNK) {
+            remove(index, remove_tags);
+            remove_tags.clear();
+          }
 	}
       }
     }
   } while (truncated);
 
 done:
+  if (remove_tags.size())
+    remove(index, remove_tags);
   l.unlock(store->gc_pool_ctx, obj_names[index]);
   delete ctx;
   return 0;

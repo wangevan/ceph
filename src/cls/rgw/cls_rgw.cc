@@ -29,6 +29,7 @@ cls_method_handle_t h_rgw_user_usage_log_read;
 cls_method_handle_t h_rgw_user_usage_log_trim;
 cls_method_handle_t h_rgw_gc_set_entry;
 cls_method_handle_t h_rgw_gc_list;
+cls_method_handle_t h_rgw_gc_remove;
 
 
 #define ROUND_BLOCK_SIZE 4096
@@ -897,7 +898,7 @@ static int rgw_cls_gc_list(cls_method_context_t hctx, bufferlist *in, bufferlist
   try {
     ::decode(op, in_iter);
   } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_gc_set_entry(): failed to decode entry\n");
+    CLS_LOG(1, "ERROR: rgw_cls_gc_list(): failed to decode entry\n");
     return -EINVAL;
   }
 
@@ -911,6 +912,53 @@ static int rgw_cls_gc_list(cls_method_context_t hctx, bufferlist *in, bufferlist
   return 0;
 }
 
+static int gc_remove(cls_method_context_t hctx, list<string>& tags)
+{
+  list<string>::iterator iter;
+
+  for (iter = tags.begin(); iter != tags.end(); ++iter) {
+    string& tag = *iter;
+    cls_rgw_gc_obj_info info;
+    int ret = gc_omap_get(hctx, GC_OBJ_NAME_INDEX, tag, &info);
+    if (ret == -ENOENT) {
+      CLS_LOG(0, "couldn't find tag in name index tag=%s\n", tag.c_str());
+      continue;
+    }
+
+    if (ret < 0)
+      return ret;
+
+    string time_key;
+    get_time_key(info.time, time_key);
+    ret = gc_omap_remove(hctx, GC_OBJ_TIME_INDEX, time_key);
+    if (ret < 0 && ret != -ENOENT)
+      return ret;
+    if (ret == -ENOENT) {
+      CLS_LOG(0, "couldn't find key in time index key=%s\n", time_key.c_str());
+    }
+
+    ret = gc_omap_remove(hctx, GC_OBJ_NAME_INDEX, tag);
+    if (ret < 0 && ret != -ENOENT)
+      return ret;
+  }
+
+  return 0;
+}
+
+static int rgw_cls_gc_remove(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+{
+  bufferlist::iterator in_iter = in->begin();
+
+  cls_rgw_gc_remove_op op;
+  try {
+    ::decode(op, in_iter);
+  } catch (buffer::error& err) {
+    CLS_LOG(1, "ERROR: rgw_cls_gc_remove(): failed to decode entry\n");
+    return -EINVAL;
+  }
+
+  return gc_remove(hctx, op.tags);
+}
 
 void __cls_init()
 {
@@ -933,6 +981,7 @@ void __cls_init()
   /* garbage collection */
   cls_register_cxx_method(h_class, "gc_set_entry", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_cls_gc_set_entry, &h_rgw_gc_set_entry);
   cls_register_cxx_method(h_class, "gc_list", CLS_METHOD_RD | CLS_METHOD_PUBLIC, rgw_cls_gc_list, &h_rgw_gc_list);
+  cls_register_cxx_method(h_class, "gc_remove", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_cls_gc_remove, &h_rgw_gc_remove);
 
   return;
 }

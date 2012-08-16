@@ -35,4 +35,6 @@ void cls_rgw_gc_set_entry(librados::ObjectWriteOperation& op, uint32_t expiratio
 int cls_rgw_gc_list(librados::IoCtx& io_ctx, string& oid, string& marker, uint32_t max,
                     list<cls_rgw_gc_obj_info>& entries, bool *truncated);
 
+void cls_rgw_gc_remove(librados::ObjectWriteOperation& op, const list<string>& tags);
+
 #endif
