@@ -239,13 +239,13 @@ class RGWRados
   Mutex bucket_id_lock;
   uint64_t max_bucket_id;
 
-  int get_obj_state(RGWRadosCtx *rctx, rgw_obj& obj, librados::IoCtx& io_ctx, string& actual_obj, RGWObjState **state);
-  int append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj, librados::IoCtx& io_ctx,
-                         string& actual_obj, librados::ObjectOperation& op, RGWObjState **state);
-  int prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj, librados::IoCtx& io_ctx,
-                         string& actual_obj, librados::ObjectWriteOperation& op, RGWObjState **pstate);
-  int prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj, librados::IoCtx& io_ctx,
-                         string& actual_obj, librados::ObjectWriteOperation& op, RGWObjState **pstate);
+  int get_obj_state(RGWRadosCtx *rctx, rgw_obj& obj, RGWObjState **state);
+  int append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj,
+                         librados::ObjectOperation& op, RGWObjState **state);
+  int prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
+                         librados::ObjectWriteOperation& op, RGWObjState **pstate);
+  int prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj,
+                         librados::ObjectWriteOperation& op, RGWObjState **pstate);
 
   void atomic_write_finish(RGWObjState *state, int r) {
     if (state && r == -ECANCELED) {
@@ -594,10 +594,12 @@ public:
   int remove_temp_objects(string date, string time);
 
   int gc_operate(string& oid, librados::ObjectWriteOperation *op);
+  int gc_aio_operate(string& oid, librados::ObjectWriteOperation *op);
   int gc_operate(string& oid, librados::ObjectReadOperation *op, bufferlist *pbl);
 
   int list_gc_objs(int *index, string& marker, uint32_t max, std::list<cls_rgw_gc_obj_info>& result, bool *truncated);
   int process_gc();
+  int defer_gc(void *ctx, rgw_obj& obj);
  private:
   int process_intent_log(rgw_bucket& bucket, string& oid,
 			 time_t epoch, int flags, bool purge);

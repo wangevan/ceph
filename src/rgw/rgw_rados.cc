@@ -898,7 +898,7 @@ int RGWRados::put_obj_meta(void *ctx, rgw_obj& obj,  uint64_t size,
   RGWObjState *state = NULL;
 
   if (!exclusive) {
-    r = prepare_atomic_for_write(rctx, obj, io_ctx, oid, op, &state);
+    r = prepare_atomic_for_write(rctx, obj, op, &state);
     if (r < 0)
       return r;
   }
@@ -1293,10 +1293,41 @@ int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, r
     chain.push_obj(bucket.pool, oid, key);
   }
 
-  int ret = gc->send_chain(chain, tag, true);
+  int ret = gc->send_chain(chain, tag, false);  // do it async
 
   return ret;
 }
+
+int RGWRados::defer_gc(void *ctx, rgw_obj& obj)
+{
+  RGWRadosCtx *rctx = (RGWRadosCtx *)ctx;
+  rgw_bucket bucket;
+  std::string oid, key;
+  get_obj_bucket_and_oid_key(obj, bucket, oid, key);
+  if (!rctx)
+    return 0;
+
+  RGWObjState *state = NULL;
+
+  int r = get_obj_state(rctx, obj, &state);
+  if (r < 0)
+    return r;
+
+  if (!state->is_atomic) {
+    ldout(cct, 20) << "state for obj=" << obj << " is not atomic, not deferring gc operation" << dendl;
+    return -EINVAL;
+  }
+
+  if (state->obj_tag.length() == 0) {// check for backward compatibility
+    ldout(cct, 20) << "state->obj_tag is empty, not deferring gc operation" << dendl;
+    return -EINVAL;
+  }
+
+  string tag = state->obj_tag.c_str();
+
+  return gc->defer_chain(tag, false);
+}
+
 
 /**
  * Delete an object.
@@ -1320,7 +1351,7 @@ int RGWRados::delete_obj_impl(void *ctx, rgw_obj& obj, bool sync)
   ObjectWriteOperation op;
 
   RGWObjState *state;
-  r = prepare_atomic_for_write(rctx, obj, io_ctx, oid, op, &state);
+  r = prepare_atomic_for_write(rctx, obj, op, &state);
   if (r < 0)
     return r;
 
@@ -1379,7 +1410,7 @@ int RGWRados::delete_obj(void *ctx, rgw_obj& obj, bool sync)
   return r;
 }
 
-int RGWRados::get_obj_state(RGWRadosCtx *rctx, rgw_obj& obj, librados::IoCtx& io_ctx, string& actual_obj, RGWObjState **state)
+int RGWRados::get_obj_state(RGWRadosCtx *rctx, rgw_obj& obj, RGWObjState **state)
 {
   RGWObjState *s = rctx->get_state(obj);
   ldout(cct, 20) << "get_obj_state: rctx=" << (void *)rctx << " obj=" << obj << " state=" << (void *)s << " s->prefetch_data=" << s->prefetch_data << dendl;
@@ -1462,7 +1493,7 @@ int RGWRados::get_attr(void *ctx, rgw_obj& obj, const char *name, bufferlist& de
 
   if (rctx) {
     RGWObjState *state;
-    r = get_obj_state(rctx, obj, io_ctx, actual_obj, &state);
+    r = get_obj_state(rctx, obj, &state);
     if (r < 0)
       return r;
     if (!state->exists)
@@ -1479,13 +1510,13 @@ int RGWRados::get_attr(void *ctx, rgw_obj& obj, const char *name, bufferlist& de
   return 0;
 }
 
-int RGWRados::append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj, librados::IoCtx& io_ctx,
-                            string& actual_obj, ObjectOperation& op, RGWObjState **pstate)
+int RGWRados::append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj,
+                            ObjectOperation& op, RGWObjState **pstate)
 {
   if (!rctx)
     return 0;
 
-  int r = get_obj_state(rctx, obj, io_ctx, actual_obj, pstate);
+  int r = get_obj_state(rctx, obj, pstate);
   if (r < 0)
     return r;
 
@@ -1504,10 +1535,10 @@ int RGWRados::append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj, librados::IoCt
   return 0;
 }
 
-int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj, librados::IoCtx& io_ctx,
-                            string& actual_obj, ObjectWriteOperation& op, RGWObjState **pstate)
+int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
+                            ObjectWriteOperation& op, RGWObjState **pstate)
 {
-  int r = get_obj_state(rctx, obj, io_ctx, actual_obj, pstate);
+  int r = get_obj_state(rctx, obj, pstate);
   if (r < 0)
     return r;
 
@@ -1584,8 +1615,8 @@ int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj, lib
   return 0;
 }
 
-int RGWRados::prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj, librados::IoCtx& io_ctx,
-                            string& actual_obj, ObjectWriteOperation& op, RGWObjState **pstate)
+int RGWRados::prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj,
+                            ObjectWriteOperation& op, RGWObjState **pstate)
 {
   if (!rctx) {
     *pstate = NULL;
@@ -1593,7 +1624,7 @@ int RGWRados::prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj, librados
   }
 
   int r;
-  r = prepare_atomic_for_write_impl(rctx, obj, io_ctx, actual_obj, op, pstate);
+  r = prepare_atomic_for_write_impl(rctx, obj, op, pstate);
 
   return r;
 }
@@ -1625,16 +1656,16 @@ int RGWRados::set_attr(void *ctx, rgw_obj& obj, const char *name, bufferlist& bl
   if (r < 0)
     return r;
 
-  io_ctx.locator_set_key(key);
-
   ObjectWriteOperation op;
   RGWObjState *state = NULL;
 
-  r = append_atomic_test(rctx, obj, io_ctx, actual_obj, op, &state);
+  r = append_atomic_test(rctx, obj, op, &state);
   if (r < 0)
     return r;
 
   op.setxattr(name, bl);
+
+  io_ctx.locator_set_key(key);
   r = io_ctx.operate(actual_obj, &op);
 
   if (state && r >= 0)
@@ -1680,7 +1711,7 @@ int RGWRados::set_attrs(void *ctx, rgw_obj& obj,
   ObjectWriteOperation op;
   RGWObjState *state = NULL;
 
-  r = append_atomic_test(rctx, obj, io_ctx, actual_obj, op, &state);
+  r = append_atomic_test(rctx, obj, op, &state);
   if (r < 0)
     return r;
 
@@ -1790,7 +1821,7 @@ int RGWRados::prepare_get_obj(void *ctx, rgw_obj& obj,
     rctx = new_ctx;
   }
 
-  r = get_obj_state(rctx, obj, state->io_ctx, oid, &astate);
+  r = get_obj_state(rctx, obj, &astate);
   if (r < 0)
     goto done_err;
 
@@ -2000,7 +2031,7 @@ int RGWRados::clone_objs_impl(void *ctx, rgw_obj& dst_obj,
     }
   }
   RGWObjState *state;
-  r = prepare_atomic_for_write(rctx, dst_obj, io_ctx, dst_oid, op, &state);
+  r = prepare_atomic_for_write(rctx, dst_obj, op, &state);
   if (r < 0)
     return r;
 
@@ -2118,7 +2149,7 @@ int RGWRados::get_obj(void *ctx, void **handle, rgw_obj& obj,
     rctx = new_ctx;
   }
 
-  int r = get_obj_state(rctx, obj, state->io_ctx, oid, &astate);
+  int r = get_obj_state(rctx, obj, &astate);
   if (r < 0)
     goto done_ret;
 
@@ -2156,7 +2187,7 @@ int RGWRados::get_obj(void *ctx, void **handle, rgw_obj& obj,
 
   if (reading_from_head) {
     /* only when reading from the head object do we need to do the atomic test */
-    r = append_atomic_test(rctx, read_obj, state->io_ctx, oid, op, &astate);
+    r = append_atomic_test(rctx, read_obj, op, &astate);
     if (r < 0)
       goto done_ret;
   }
@@ -2222,7 +2253,7 @@ int RGWRados::read(void *ctx, rgw_obj& obj, off_t ofs, size_t size, bufferlist& 
 
   ObjectReadOperation op;
 
-  r = append_atomic_test(rctx, obj, io_ctx, oid, op, &astate);
+  r = append_atomic_test(rctx, obj, op, &astate);
   if (r < 0)
     return r;
 
@@ -2522,6 +2553,14 @@ int RGWRados::pool_iterate(RGWPoolIterCtx& ctx, uint32_t num, vector<RGWObjEnt>&
 int RGWRados::gc_operate(string& oid, librados::ObjectWriteOperation *op)
 {
   return gc_pool_ctx.operate(oid, op);
+}
+
+int RGWRados::gc_aio_operate(string& oid, librados::ObjectWriteOperation *op)
+{
+  AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
+  int r = gc_pool_ctx.aio_operate(oid, c, op);
+  c->release();
+  return r;
 }
 
 int RGWRados::gc_operate(string& oid, librados::ObjectReadOperation *op, bufferlist *pbl)

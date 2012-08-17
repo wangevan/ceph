@@ -43,23 +43,39 @@ int RGWGC::tag_index(const string& tag)
   return ceph_str_hash_linux(tag.c_str(), tag.size()) % max_objs;
 }
 
-void RGWGC::add_chain(ObjectWriteOperation& op, cls_rgw_obj_chain& chain, const string& tag, bool create)
+void RGWGC::add_chain(ObjectWriteOperation& op, cls_rgw_obj_chain& chain, const string& tag)
 {
   cls_rgw_gc_obj_info info;
   info.chain = chain;
   info.tag = tag;
 
-  cls_rgw_gc_set_entry(op, cct->_conf->rgw_gc_obj_min_wait, info, create);
+  cls_rgw_gc_set_entry(op, cct->_conf->rgw_gc_obj_min_wait, info);
 }
 
-int RGWGC::send_chain(cls_rgw_obj_chain& chain, const string& tag, bool create)
+int RGWGC::send_chain(cls_rgw_obj_chain& chain, const string& tag, bool sync)
 {
   ObjectWriteOperation op;
-  add_chain(op, chain, tag, create);
+  add_chain(op, chain, tag);
 
   int i = tag_index(tag);
 
-  return store->gc_operate(obj_names[i], &op);
+  if (sync)
+    return store->gc_operate(obj_names[i], &op);
+
+  return store->gc_aio_operate(obj_names[i], &op);
+}
+
+int RGWGC::defer_chain(const string& tag, bool sync)
+{
+  ObjectWriteOperation op;
+  cls_rgw_gc_defer_entry(op, cct->_conf->rgw_gc_obj_min_wait, tag);
+
+  int i = tag_index(tag);
+
+  if (sync)
+    return store->gc_operate(obj_names[i], &op);
+
+  return store->gc_aio_operate(obj_names[i], &op);
 }
 
 int RGWGC::remove(int index, const std::list<string>& tags)
@@ -149,6 +165,7 @@ int RGWGC::process(int index, int max_secs)
     ctx = new IoCtx;
     std::list<cls_rgw_gc_obj_info>::iterator iter;
     for (iter = entries.begin(); iter != entries.end(); ++iter) {
+      bool remove_tag;
       cls_rgw_gc_obj_info& info = *iter;
       std::list<cls_rgw_obj>::iterator liter;
       cls_rgw_obj_chain& chain = info.chain;
@@ -157,6 +174,7 @@ int RGWGC::process(int index, int max_secs)
       if (now >= end)
         goto done;
 
+      remove_tag = true;
       for (liter = chain.objs.begin(); liter != chain.objs.end(); ++liter) {
         cls_rgw_obj& obj = *liter;
 
@@ -179,19 +197,20 @@ int RGWGC::process(int index, int max_secs)
 	if (ret == -ENOENT)
 	  ret = 0;
         if (ret < 0) {
+          remove_tag = false;
           dout(0) << "failed to remove " << obj.pool << ":" << obj.oid << "@" << obj.key << dendl;
         }
-	if (!ret) {
-          remove_tags.push_back(info.tag);
-#define MAX_REMOVE_CHUNK 16
-          if (remove_tags.size() > MAX_REMOVE_CHUNK) {
-            remove(index, remove_tags);
-            remove_tags.clear();
-          }
-	}
 
-        if (going_down())
+        if (going_down()) // leave early, even if tag isn't removed, it's ok
           goto done;
+      }
+      if (remove_tag) {
+        remove_tags.push_back(info.tag);
+#define MAX_REMOVE_CHUNK 16
+        if (remove_tags.size() > MAX_REMOVE_CHUNK) {
+          remove(index, remove_tags);
+          remove_tags.clear();
+        }
       }
     }
   } while (truncated);

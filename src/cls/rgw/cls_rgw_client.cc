@@ -146,15 +146,24 @@ void cls_rgw_usage_log_add(ObjectWriteOperation& op, rgw_usage_log_info& info)
 
 /* garbage collection */
 
-void cls_rgw_gc_set_entry(ObjectWriteOperation& op, uint32_t expiration_secs, cls_rgw_gc_obj_info& info, bool create)
+void cls_rgw_gc_set_entry(ObjectWriteOperation& op, uint32_t expiration_secs, cls_rgw_gc_obj_info& info)
 {
   bufferlist in;
   cls_rgw_gc_set_entry_op call;
   call.expiration_secs = expiration_secs;
   call.info = info;
-  call.create = create;
   ::encode(call, in);
   op.exec("rgw", "gc_set_entry", in);
+}
+
+void cls_rgw_gc_defer_entry(ObjectWriteOperation& op, uint32_t expiration_secs, const string& tag)
+{
+  bufferlist in;
+  cls_rgw_gc_defer_entry_op call;
+  call.expiration_secs = expiration_secs;
+  call.tag = tag;
+  ::encode(call, in);
+  op.exec("rgw", "gc_defer_entry", in);
 }
 
 int cls_rgw_gc_list(IoCtx& io_ctx, string& oid, string& marker, uint32_t max,

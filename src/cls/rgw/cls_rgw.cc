@@ -734,12 +734,10 @@ void get_time_key(utime_t& ut, string& key)
 }
 
 static int gc_update_entry(cls_method_context_t hctx, uint32_t expiration_secs,
-                           cls_rgw_gc_obj_info& info, bool create)
+                           cls_rgw_gc_obj_info& info)
 {
   cls_rgw_gc_obj_info old_info;
   int ret = gc_omap_get(hctx, GC_OBJ_NAME_INDEX, info.tag, &old_info);
-  if (ret == -ENOENT && !create)
-    return 0;
   if (ret == 0) {
     string key;
     get_time_key(old_info.time, key);
@@ -769,6 +767,17 @@ done_err:
   return ret;
 }
 
+static int gc_defer_entry(cls_method_context_t hctx, const string& tag, uint32_t expiration_secs)
+{
+  cls_rgw_gc_obj_info info;
+  int ret = gc_omap_get(hctx, GC_OBJ_NAME_INDEX, info.tag, &info);
+  if (ret == -ENOENT)
+    return 0;
+  if (ret < 0)
+    return ret;
+  return gc_update_entry(hctx, expiration_secs, info);
+}
+
 int gc_record_decode(bufferlist& bl, cls_rgw_gc_obj_info& e)
 {
   bufferlist::iterator iter = bl.begin();
@@ -793,7 +802,22 @@ static int rgw_cls_gc_set_entry(cls_method_context_t hctx, bufferlist *in, buffe
     return -EINVAL;
   }
 
-  return gc_update_entry(hctx, op.expiration_secs, op.info, op.create);
+  return gc_update_entry(hctx, op.expiration_secs, op.info);
+}
+
+static int rgw_cls_gc_defer_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+{
+  bufferlist::iterator in_iter = in->begin();
+
+  cls_rgw_gc_defer_entry_op op;
+  try {
+    ::decode(op, in_iter);
+  } catch (buffer::error& err) {
+    CLS_LOG(1, "ERROR: rgw_cls_gc_defer_entry(): failed to decode entry\n");
+    return -EINVAL;
+  }
+
+  return gc_defer_entry(hctx, op.tag, op.expiration_secs);
 }
 
 static int gc_iterate_entries(cls_method_context_t hctx, const string& marker,
@@ -983,6 +1007,7 @@ void __cls_init()
 
   /* garbage collection */
   cls_register_cxx_method(h_class, "gc_set_entry", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_cls_gc_set_entry, &h_rgw_gc_set_entry);
+  cls_register_cxx_method(h_class, "gc_defer_entry", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_cls_gc_defer_entry, &h_rgw_gc_set_entry);
   cls_register_cxx_method(h_class, "gc_list", CLS_METHOD_RD | CLS_METHOD_PUBLIC, rgw_cls_gc_list, &h_rgw_gc_list);
   cls_register_cxx_method(h_class, "gc_remove", CLS_METHOD_RD | CLS_METHOD_WR | CLS_METHOD_PUBLIC, rgw_cls_gc_remove, &h_rgw_gc_remove);
 

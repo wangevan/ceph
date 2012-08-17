@@ -37,8 +37,9 @@ class RGWGC {
 public:
   RGWGC() : cct(NULL), store(NULL), max_objs(0), obj_names(NULL), worker(NULL) {}
 
-  void add_chain(librados::ObjectWriteOperation& op, cls_rgw_obj_chain& chain, const string& tag, bool create);
-  int send_chain(cls_rgw_obj_chain& chain, const string& tag, bool create);
+  void add_chain(librados::ObjectWriteOperation& op, cls_rgw_obj_chain& chain, const string& tag);
+  int send_chain(cls_rgw_obj_chain& chain, const string& tag, bool sync);
+  int defer_chain(const string& tag, bool sync);
   int remove(int index, const std::list<string>& tags);
 
   void initialize(CephContext *_cct, RGWRados *_store);

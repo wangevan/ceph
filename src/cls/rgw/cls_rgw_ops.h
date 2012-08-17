@@ -218,7 +218,6 @@ struct rgw_cls_usage_log_trim_op {
 WRITE_CLASS_ENCODER(rgw_cls_usage_log_trim_op)
 
 struct cls_rgw_gc_set_entry_op {
-  bool create;
   uint32_t expiration_secs;
   cls_rgw_gc_obj_info info;
   cls_rgw_gc_set_entry_op() {}
@@ -227,7 +226,6 @@ struct cls_rgw_gc_set_entry_op {
     ENCODE_START(1, 1, bl);
     ::encode(expiration_secs, bl);
     ::encode(info, bl);
-    ::encode(create, bl);
     ENCODE_FINISH(bl);
   }
 
@@ -235,11 +233,31 @@ struct cls_rgw_gc_set_entry_op {
     DECODE_START(1, bl);
     ::decode(expiration_secs, bl);
     ::decode(info, bl);
-    ::decode(create, bl);
     DECODE_FINISH(bl);
   }
 };
 WRITE_CLASS_ENCODER(cls_rgw_gc_set_entry_op)
+
+struct cls_rgw_gc_defer_entry_op {
+  uint32_t expiration_secs;
+  string tag;
+  cls_rgw_gc_defer_entry_op() {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(expiration_secs, bl);
+    ::encode(tag, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(expiration_secs, bl);
+    ::decode(tag, bl);
+    DECODE_FINISH(bl);
+  }
+};
+WRITE_CLASS_ENCODER(cls_rgw_gc_defer_entry_op)
 
 struct cls_rgw_gc_list_op {
   string marker;
