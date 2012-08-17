@@ -749,7 +749,7 @@ int main(int argc, char **argv)
                     opt_cmd == OPT_KEY_CREATE || opt_cmd == OPT_KEY_RM || opt_cmd == OPT_USER_RM);
 
   RGWStoreManager store_manager;
-  store = store_manager.init(g_ceph_context);
+  store = store_manager.init(g_ceph_context, false);
   if (!store) {
     cerr << "couldn't init storage provider" << std::endl;
     return 5; //EIO

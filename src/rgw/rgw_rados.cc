@@ -67,7 +67,7 @@ public:
   }
 };
 
-RGWRados *RGWRados::init_storage_provider(CephContext *cct)
+RGWRados *RGWRados::init_storage_provider(CephContext *cct, bool use_gc_thread)
 {
   int use_cache = cct->_conf->rgw_cache_enabled;
   store = NULL;
@@ -77,7 +77,7 @@ RGWRados *RGWRados::init_storage_provider(CephContext *cct)
     store = &cached_rados_provider;
   }
 
-  if (store->initialize(cct) < 0)
+  if (store->initialize(cct, use_gc_thread) < 0)
     store = NULL;
 
   return store;
@@ -90,6 +90,13 @@ void RGWRados::close_storage()
 
   store->finalize();
   store = NULL;
+}
+
+
+void RGWRados::finalize()
+{
+  if (use_gc_thread)
+    gc->stop_processor();
 }
 
 /** 
@@ -122,6 +129,9 @@ int RGWRados::initialize()
 
   gc = new RGWGC();
   gc->initialize(cct, this);
+
+  if (use_gc_thread)
+    gc->start_processor();
 
   return ret;
 }

@@ -249,10 +249,12 @@ void RGWGC::stop_processor()
 void *RGWGC::GCWorker::entry() {
   do {
     utime_t start = ceph_clock_now(cct);
+    dout(2) << "garbage collection: start" << dendl;
     int r = gc->process();
     if (r < 0) {
       dout(0) << "ERROR: garbage collection process() returned error r=" << r << dendl;
     }
+    dout(2) << "garbage collection: stop" << dendl;
 
     if (gc->going_down())
       break;
@@ -261,8 +263,11 @@ void *RGWGC::GCWorker::entry() {
     end -= start;
     int secs = cct->_conf->rgw_gc_processor_period;
 
-    if (secs >= end.sec())
+    if (secs <= end.sec())
       continue; // next round
+
+    secs -= end.sec();
+
     lock.Lock();
     cond.WaitInterval(cct, lock, utime_t(secs, 0));
     lock.Unlock();

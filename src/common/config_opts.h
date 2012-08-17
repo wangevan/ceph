@@ -425,8 +425,8 @@ OPTION(rgw_init_timeout, OPT_INT, 30) // time in seconds
 OPTION(rgw_mime_types_file, OPT_STR, "/etc/mime.types")
 OPTION(rgw_gc_max_objs, OPT_INT, 16)
 OPTION(rgw_gc_obj_min_wait, OPT_INT, 60)    // wait time before object may be handled by gc
-OPTION(rgw_gc_processor_max_time, OPT_INT, 60)  // total run time for a single gc processor work
-OPTION(rgw_gc_processor_period, OPT_INT, 120)  // gc processor cycle time
+OPTION(rgw_gc_processor_max_time, OPT_INT, 15)  // total run time for a single gc processor work
+OPTION(rgw_gc_processor_period, OPT_INT, 30)  // gc processor cycle time
 
 // This will be set to true when it is safe to start threads.
 // Once it is true, it will never change.

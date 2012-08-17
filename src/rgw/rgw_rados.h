@@ -228,6 +228,7 @@ class RGWRados
   };
 
   RGWGC *gc;
+  bool use_gc_thread;
 
 
   RGWWatcher *watcher;
@@ -288,7 +289,7 @@ protected:
   librados::IoCtx gc_pool_ctx;        // .rgw.gc
 
 public:
-  RGWRados() : lock("rados_timer_lock"), timer(NULL), gc(NULL), watcher(NULL), watch_handle(0),
+  RGWRados() : lock("rados_timer_lock"), timer(NULL), gc(NULL), use_gc_thread(false), watcher(NULL), watch_handle(0),
                bucket_id_lock("rados_bucket_id"), max_bucket_id(0), rados(NULL) {}
   virtual ~RGWRados() {}
 
@@ -296,15 +297,16 @@ public:
 
   CephContext *ctx() { return cct; }
   /** do all necessary setup of the storage device */
-  int initialize(CephContext *_cct) {
+  int initialize(CephContext *_cct, bool _use_gc_thread) {
     cct = _cct;
+    use_gc_thread = _use_gc_thread;
     return initialize();
   }
   /** Initialize the RADOS instance and prepare to do other ops */
   virtual int initialize();
-  virtual void finalize() {}
+  virtual void finalize();
 
-  static RGWRados *init_storage_provider(CephContext *cct);
+  static RGWRados *init_storage_provider(CephContext *cct, bool use_gc_thread);
   static void close_storage();
   static RGWRados *store;
 
@@ -650,13 +652,14 @@ public:
 class RGWStoreManager {
   RGWRados *store;
 public:
-  RGWStoreManager() : store(NULL) {}
+  RGWStoreManager(): store(NULL) {}
   ~RGWStoreManager() {
-    if (store)
+    if (store) {
       RGWRados::close_storage();
+    }
   }
-  RGWRados *init(CephContext *cct) {
-    store = RGWRados::init_storage_provider(cct);
+  RGWRados *init(CephContext *cct, bool use_gc_thread) {
+    store = RGWRados::init_storage_provider(cct, use_gc_thread);
     return store;
   }
 };

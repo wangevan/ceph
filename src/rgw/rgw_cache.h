@@ -184,6 +184,7 @@ class RGWCache  : public T
 
   void finalize() {
     T::finalize_watch();
+    T::finalize();
   }
   int distribute(rgw_obj& obj, ObjectCacheInfo& obj_info, int op);
   int watch_cb(int opcode, uint64_t ver, bufferlist& bl);
