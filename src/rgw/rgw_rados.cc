@@ -969,7 +969,7 @@ int RGWRados::put_obj_meta(void *ctx, rgw_obj& obj,  uint64_t size,
 
   epoch = io_ctx.get_last_version();
 
-  r = complete_atomic_overwrite(rctx, state, obj, tag);
+  r = complete_atomic_overwrite(rctx, state, obj);
   if (r < 0) {
     ldout(cct, 0) << "ERROR: complete_atomic_overwrite returned r=" << r << dendl;
   }
@@ -1276,7 +1276,7 @@ int RGWRados::bucket_suspended(rgw_bucket& bucket, bool *suspended)
   return 0;
 }
 
-int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& obj, const string& tag)
+int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& obj)
 {
   if (!state || !state->has_manifest)
     return 0;
@@ -1293,6 +1293,7 @@ int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, r
     chain.push_obj(bucket.pool, oid, key);
   }
 
+  string tag = state->obj_tag.c_str();
   int ret = gc->send_chain(chain, tag, false);  // do it async
 
   return ret;
@@ -1324,6 +1325,8 @@ int RGWRados::defer_gc(void *ctx, rgw_obj& obj)
   }
 
   string tag = state->obj_tag.c_str();
+
+  ldout(cct, 0) << "defer chain tag=" << tag << dendl;
 
   return gc->defer_chain(tag, false);
 }
@@ -1376,7 +1379,7 @@ int RGWRados::delete_obj_impl(void *ctx, rgw_obj& obj, bool sync)
       }
     }
     if (removed) {
-      int ret = complete_atomic_overwrite(rctx, state, obj, tag);
+      int ret = complete_atomic_overwrite(rctx, state, obj);
       if (ret < 0) {
         ldout(cct, 0) << "ERROR: complete_atomic_removal returned ret=" << ret << dendl;
       }
@@ -1408,6 +1411,38 @@ int RGWRados::delete_obj(void *ctx, rgw_obj& obj, bool sync)
     r = 0;
 
   return r;
+}
+
+static void generate_fake_tag(CephContext *cct, map<string, bufferlist>& attrset, RGWObjManifest& manifest, bufferlist& manifest_bl, bufferlist& tag_bl)
+{
+  string tag;
+
+  map<uint64_t, RGWObjManifestPart>::iterator mi = manifest.objs.begin();
+  if (mi != manifest.objs.end()) {
+    if (manifest.objs.size() > 1) // first object usually points at the head, let's skip to a more unique part
+      ++mi;
+    tag = mi->second.loc.object;
+    tag.append("_");
+  }
+
+  unsigned char md5[CEPH_CRYPTO_MD5_DIGESTSIZE];
+  char md5_str[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
+  MD5 hash;
+  hash.Update((const byte *)manifest_bl.c_str(), manifest_bl.length());
+
+  map<string, bufferlist>::iterator iter = attrset.find(RGW_ATTR_ETAG);
+  if (iter != attrset.end()) {
+    bufferlist& bl = iter->second;
+    hash.Update((const byte *)bl.c_str(), bl.length());
+  }
+
+  hash.Final(md5);
+  buf_to_hex(md5, CEPH_CRYPTO_MD5_DIGESTSIZE, md5_str);
+  tag.append(md5_str);
+
+  ldout(cct, 10) << "generate_fake_tag new tag=" << tag << dendl;
+
+  tag_bl.append(tag.c_str(), tag.size() + 1);
 }
 
 int RGWRados::get_obj_state(RGWRadosCtx *rctx, rgw_obj& obj, RGWObjState **state)
@@ -1453,6 +1488,15 @@ int RGWRados::get_obj_state(RGWRadosCtx *rctx, rgw_obj& obj, RGWObjState **state
     map<uint64_t, RGWObjManifestPart>::iterator mi;
     for (mi = s->manifest.objs.begin(); mi != s->manifest.objs.end(); ++mi) {
       ldout(cct, 10) << "manifest: ofs=" << mi->first << " loc=" << mi->second.loc << dendl;
+    }
+
+    if (!s->obj_tag.length()) {
+      /*
+       * Uh oh, something's wrong, object with manifest should have tag. Let's
+       * create one out of the manifest, would be unique
+       */
+      generate_fake_tag(cct, s->attrset, s->manifest, manifest_bl, s->obj_tag);
+      s->fake_tag = true;
     }
   }
   if (s->obj_tag.length())
@@ -1527,7 +1571,7 @@ int RGWRados::append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj,
     return 0;
   }
 
-  if (state->obj_tag.length() > 0) {// check for backward compatibility
+  if (state->obj_tag.length() > 0 && !state->fake_tag) {// check for backward compatibility
     op.cmpxattr(RGW_ATTR_ID_TAG, LIBRADOS_CMPXATTR_OP_EQ, state->obj_tag);
   } else {
     ldout(cct, 20) << "state->obj_tag is empty, not appending atomic test" << dendl;
@@ -1544,7 +1588,7 @@ int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
 
   RGWObjState *state = *pstate;
 
-  bool need_guard = state->has_manifest || (state->obj_tag.length() != 0);
+  bool need_guard = (state->has_manifest || (state->obj_tag.length() != 0)) && (!state->fake_tag);
 
   if (!state->is_atomic) {
     ldout(cct, 20) << "prepare_atomic_for_write_impl: state is not atomic. state=" << (void *)state << dendl;

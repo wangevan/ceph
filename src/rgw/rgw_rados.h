@@ -120,6 +120,7 @@ struct RGWObjState {
   uint64_t size;
   time_t mtime;
   bufferlist obj_tag;
+  bool fake_tag;
   RGWObjManifest manifest;
   bool has_manifest;
   string shadow_obj;
@@ -128,7 +129,7 @@ struct RGWObjState {
   bool prefetch_data;
 
   map<string, bufferlist> attrset;
-  RGWObjState() : is_atomic(false), has_attrs(0), exists(false), has_manifest(false), prefetch_data(false) {}
+  RGWObjState() : is_atomic(false), has_attrs(0), exists(false), fake_tag(false), has_manifest(false), prefetch_data(false) {}
 
   bool get_attr(string name, bufferlist& dest) {
     map<string, bufferlist>::iterator iter = attrset.find(name);
@@ -142,6 +143,7 @@ struct RGWObjState {
   void clear() {
     has_attrs = false;
     exists = false;
+    fake_tag = false;
     size = 0;
     mtime = 0;
     obj_tag.clear();
@@ -277,7 +279,7 @@ class RGWRados
     return clone_objs(ctx, dst_obj, v, attrs, category, pmtime, true, false);
   }
   int delete_obj_impl(void *ctx, rgw_obj& src_obj, bool sync);
-  int complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& obj, const string& tag);
+  int complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& obj);
 
   int update_placement_map();
   int select_bucket_placement(std::string& bucket_name, rgw_bucket& bucket);
