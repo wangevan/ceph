@@ -898,17 +898,16 @@ int RGWRados::put_obj_meta(void *ctx, rgw_obj& obj,  uint64_t size,
   RGWObjState *state = NULL;
 
   if (!exclusive) {
-    r = prepare_atomic_for_write(rctx, obj, op, &state);
+    r = prepare_atomic_for_write(rctx, obj, op, &state, true);
     if (r < 0)
       return r;
+  } else {
+    op.create(true); // exclusive create
   }
-
-  op.create(exclusive);
 
   if (data) {
     /* if we want to overwrite the data, we also want to overwrite the
        xattrs, so just remove the object */
-    op.remove();
     op.write_full(*data);
   }
 
@@ -1354,7 +1353,7 @@ int RGWRados::delete_obj_impl(void *ctx, rgw_obj& obj, bool sync)
   ObjectWriteOperation op;
 
   RGWObjState *state;
-  r = prepare_atomic_for_write(rctx, obj, op, &state);
+  r = prepare_atomic_for_write(rctx, obj, op, &state, false);
   if (r < 0)
     return r;
 
@@ -1580,7 +1579,8 @@ int RGWRados::append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj,
 }
 
 int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
-                            ObjectWriteOperation& op, RGWObjState **pstate)
+                            ObjectWriteOperation& op, RGWObjState **pstate,
+			    bool reset_obj)
 {
   int r = get_obj_state(rctx, obj, pstate);
   if (r < 0)
@@ -1592,6 +1592,12 @@ int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
 
   if (!state->is_atomic) {
     ldout(cct, 20) << "prepare_atomic_for_write_impl: state is not atomic. state=" << (void *)state << dendl;
+
+    if (reset_obj) {
+      op.create(false);
+      op.remove();
+    }
+
     return 0;
   }
 
@@ -1641,10 +1647,15 @@ int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
     // FIXME: need to add FAIL_NOTEXIST_OK for racing deletion
   }
 
+  if (reset_obj) {
+    op.create(false);
+    op.remove();
+  }
+
   string tag;
   append_rand_alpha(cct, tag, tag, 32);
   bufferlist bl;
-  bl.append(tag);
+  bl.append(tag.c_str(), tag.size() + 1);
 
   op.setxattr(RGW_ATTR_ID_TAG, bl);
 
@@ -1660,7 +1671,8 @@ int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
 }
 
 int RGWRados::prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj,
-                            ObjectWriteOperation& op, RGWObjState **pstate)
+                            ObjectWriteOperation& op, RGWObjState **pstate,
+			    bool reset_obj)
 {
   if (!rctx) {
     *pstate = NULL;
@@ -1668,7 +1680,7 @@ int RGWRados::prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj,
   }
 
   int r;
-  r = prepare_atomic_for_write_impl(rctx, obj, op, pstate);
+  r = prepare_atomic_for_write_impl(rctx, obj, op, pstate, reset_obj);
 
   return r;
 }
@@ -2075,7 +2087,7 @@ int RGWRados::clone_objs_impl(void *ctx, rgw_obj& dst_obj,
     }
   }
   RGWObjState *state;
-  r = prepare_atomic_for_write(rctx, dst_obj, op, &state);
+  r = prepare_atomic_for_write(rctx, dst_obj, op, &state, true);
   if (r < 0)
     return r;
 

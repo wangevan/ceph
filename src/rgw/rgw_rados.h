@@ -245,9 +245,11 @@ class RGWRados
   int append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj,
                          librados::ObjectOperation& op, RGWObjState **state);
   int prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
-                         librados::ObjectWriteOperation& op, RGWObjState **pstate);
+                         librados::ObjectWriteOperation& op, RGWObjState **pstate,
+			 bool reset_obj);
   int prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj,
-                         librados::ObjectWriteOperation& op, RGWObjState **pstate);
+                         librados::ObjectWriteOperation& op, RGWObjState **pstate,
+			 bool reset_obj);
 
   void atomic_write_finish(RGWObjState *state, int r) {
     if (state && r == -ECANCELED) {
