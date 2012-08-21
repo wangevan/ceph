@@ -1104,3 +1104,70 @@ TEST(LibRBD, TestClone)
   rados_ioctx_destroy(ioctx);
   ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
 }
+
+TEST(LibRBD, ListChildren)
+{
+  rados_t cluster;
+  rados_ioctx_t ioctx1, ioctx2;
+#if 0
+  rbd_image_info_t pinfo, cinfo;
+#endif
+  string pool_name1 = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool(pool_name1, &cluster));
+  string pool_name2 = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool(pool_name2, &cluster));
+  rados_ioctx_create(cluster, pool_name1.c_str(), &ioctx1);
+  rados_ioctx_create(cluster, pool_name2.c_str(), &ioctx2);
+
+  int features = RBD_FEATURE_LAYERING;
+  rbd_image_t parent, child;
+  int order = 0;
+
+  // make a parent to clone from
+  ASSERT_EQ(0, create_image_full(ioctx1, "parent", 4<<20, &order,
+				 false, features));
+  ASSERT_EQ(0, rbd_open(ioctx1, "parent", &parent, NULL));
+  // create a snapshot, reopen as the parent we're interested in
+  ASSERT_EQ(0, rbd_snap_create(parent, "parent_snap"));
+  ASSERT_EQ(0, rbd_snap_set(parent, "parent_snap"));
+  ASSERT_EQ(0, rbd_snap_protect(parent, "parent_snap"));
+
+  ASSERT_EQ(0, rbd_close(parent));
+  ASSERT_EQ(0, rbd_open(ioctx1, "parent", &parent, "parent_snap"));
+
+  ASSERT_EQ(0, rbd_clone(ioctx1, "parent", "parent_snap", ioctx2, "child",
+	    features, &order));
+  ASSERT_EQ(0, rbd_open(ioctx2, "child", &child, NULL));
+
+  rbd_snap_info_t snaps[5];
+  char pools[256];
+  char children[256];
+  int snaps_len = 5;
+  size_t  pools_len = 256;
+  size_t children_len = 256;
+
+  // rbd_snap_list returns number of snaps
+  ASSERT_EQ(1, rbd_snap_list(parent, snaps, &snaps_len));
+  ASSERT_LE(5, snaps_len);
+  ASSERT_STREQ("parent_snap", snaps[0].name);
+
+  ASSERT_EQ(0, rbd_list_children(parent, pools, &pools_len,
+				 children, &children_len));
+  ASSERT_LE(children_len, 256U);
+  ASSERT_STREQ("child", children);
+  ASSERT_LE(pools_len, 256U);
+  ASSERT_STREQ(pool_name2.c_str(), pools);
+
+  ASSERT_EQ(0, rbd_close(child));
+  ASSERT_EQ(0, rbd_remove(ioctx2, "child"));
+
+  ASSERT_EQ(0, rbd_snap_unprotect(parent, "parent_snap"));
+  ASSERT_EQ(0, rbd_snap_remove(parent, "parent_snap"));
+  ASSERT_EQ(0, rbd_close(parent));
+  ASSERT_EQ(0, rbd_remove(ioctx1, "parent"));
+  rados_ioctx_destroy(ioctx1);
+  rados_ioctx_destroy(ioctx2);
+  // destroy_one_pool also closes the cluster; do this one step at a time
+  ASSERT_EQ(0, rados_pool_delete(cluster, pool_name1.c_str()));
+  ASSERT_EQ(0, destroy_one_pool(pool_name2, &cluster));
+}
