@@ -1137,7 +1137,8 @@ bool PG::calc_acting(int& newest_update_osd_id, vector<int>& want) const
   unsigned usable = 1;
   unsigned backfill = 0;
 
-  // select replicas that have log contiguity with primary
+  // select replicas that have log contiguity with primary.
+  // prefer up, then acting, then any peer_info osds 
   for (vector<int>::const_iterator i = up.begin();
        i != up.end();
        ++i) {
@@ -1159,6 +1160,28 @@ bool PG::calc_acting(int& newest_update_osd_id, vector<int>& want) const
     }
   }
 
+  for (vector<int>::const_iterator i = acting.begin();
+       i != acting.end();
+       ++i) {
+    if (usable >= get_osdmap()->get_pg_size(info.pgid))
+      break;
+
+    // skip up osds we already considered above
+    if (i->first == primary->first)
+      continue;
+    vector<int>::const_iterator up_it = find(up.begin(), up.end(), i->first);
+    if (up_it != up.end())
+      continue;
+
+    if (i->second.is_incomplete() || i->second.last_update < primary->second.log_tail) {
+      dout(10) << " osd." << i->first << " (stray) REJECTED " << i->second << dendl;
+    } else {
+      want.push_back(i->first);
+      dout(10) << " osd." << i->first << " (stray) accepted " << i->second << dendl;
+      usable++;
+    }
+  }
+
   for (map<int,pg_info_t>::const_iterator i = all_info.begin();
        i != all_info.end();
        ++i) {
@@ -1170,6 +1193,9 @@ bool PG::calc_acting(int& newest_update_osd_id, vector<int>& want) const
       continue;
     vector<int>::const_iterator up_it = find(up.begin(), up.end(), i->first);
     if (up_it != up.end())
+      continue;
+    vector<int>::const_iterator acting_it = find(acting.begin(), acting.end(), i->first);
+    if (acting_it != acting.end())
       continue;
 
     if (i->second.is_incomplete() || i->second.last_update < primary->second.log_tail) {
