@@ -1957,16 +1957,19 @@ void OSD::heartbeat_check()
       derr << "heartbeat_check: no reply from osd." << p->first
 	   << " ever, first ping sent " << p->second.first_tx
 	   << " (cutoff " << cutoff << ")" << dendl;
+
+      // fail
+      failure_queue[p->first] = p->second.last_tx;
     } else {
       if (p->second.last_rx > cutoff)
 	continue;  // got recent reply
       derr << "heartbeat_check: no reply from osd." << p->first
 	   << " since " << p->second.last_rx
 	   << " (cutoff " << cutoff << ")" << dendl;
-    }
 
-    // fail!
-    queue_failure(p->first);
+      // fail
+      failure_queue[p->first] = p->second.last_rx;
+    }
   }
 }
 
@@ -2460,9 +2463,10 @@ void OSD::send_failures()
     locked = true;
   }
   while (!failure_queue.empty()) {
-    int osd = *failure_queue.begin();
+    int osd = failure_queue.begin()->first;
+    utime_t since = failure_queue.begin()->second;
     entity_inst_t i = osdmap->get_inst(osd);
-    monc->send_mon_message(new MOSDFailure(monc->get_fsid(), i, osdmap->get_epoch()));
+    monc->send_mon_message(new MOSDFailure(monc->get_fsid(), i, since, osdmap->get_epoch()));
     failure_pending[osd] = i;
     failure_queue.erase(osd);
   }
@@ -2471,7 +2475,7 @@ void OSD::send_failures()
 
 void OSD::send_still_alive(epoch_t epoch, entity_inst_t i)
 {
-  MOSDFailure *m = new MOSDFailure(monc->get_fsid(), i, epoch);
+  MOSDFailure *m = new MOSDFailure(monc->get_fsid(), i, utime_t(), epoch);
   m->is_failed = false;
   monc->send_mon_message(m);
 }
