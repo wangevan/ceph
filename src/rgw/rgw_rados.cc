@@ -49,6 +49,8 @@ static RGWObjCategory main_category = RGW_OBJ_CATEGORY_MAIN;
 
 #define RGW_USAGE_OBJ_PREFIX "usage."
 
+#define RGW_DEFAULT_CLUSTER_ROOT_POOL ".rgw.root"
+
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -66,6 +68,37 @@ void RGWRadosParams::init_default()
   user_uid_pool = ".users.uid";
 }
 
+int RGWRadosParams::init(CephContext *cct, RGWRados *store)
+{
+  string pool_name = cct->_conf->rgw_cluster_root_pool;
+  if (pool_name.empty())
+    pool_name = RGW_DEFAULT_CLUSTER_ROOT_POOL;
+
+  rgw_bucket pool(pool_name.c_str());
+  bufferlist bl;
+
+  string cluster_info_oid = "cluster_info";
+
+  int ret = rgw_get_obj(store, NULL, pool, cluster_info_oid, bl);
+  if (ret == -ENOENT) {
+    init_default();
+    ::encode(*this, bl);
+    ret = rgw_put_system_obj(store, pool, cluster_info_oid, bl.c_str(), bl.length(), true, NULL);
+    return ret;
+  }
+  if (ret < 0)
+    return ret;
+
+  try {
+    bufferlist::iterator iter = bl.begin();
+    ::decode(*this, iter);
+  } catch (buffer::error& err) {
+    ldout(cct, 0) << "ERROR: failed to decode cluster info from " << pool << ":" << cluster_info_oid << dendl;
+    return -EIO;
+  }
+
+  return 0;
+}
 
 class RGWWatcher : public librados::WatchCtx {
   RGWRados *rados;
@@ -130,7 +163,7 @@ int RGWRados::initialize()
   if (ret < 0)
    return ret;
 
-  params.init_default();
+  params.init(cct, this);
 
   ret = open_root_pool_ctx();
   if (ret < 0)
