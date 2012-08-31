@@ -683,11 +683,16 @@ bool OSDMonitor::prepare_failure(MOSDFailure *m)
   int reporter = m->get_orig_source().num();
   assert(osdmap.is_up(target_osd));
   assert(osdmap.get_addr(target_osd) == m->get_target().addr);
+
+  // make sure reproted failure time is not in the future.  reprots
+  // may appear old, but we won't thing they are too young.
+  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t failed_since = MIN(m->failed_since, now);
   
   if (m->if_osd_failed()) {
     // add a report
     failure_info_t& fi = failure_info[target_osd];
-    fi.add_report(reporter, m->failed_since);
+    fi.add_report(reporter, failed_since);
     dout(10) << " osd." << target_osd << " has "
 	     << fi.reporters.size() << " reporters and "
 	     << fi.num_reports << " reports" << dendl;
