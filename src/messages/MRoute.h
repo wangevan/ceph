@@ -43,12 +43,14 @@ public:
     bufferlist::iterator p = payload.begin();
     ::decode(session_mon_tid, p);
     ::decode(dest, p);
-    msg = decode_message(NULL, p);
+    if (!p.end())
+      msg = decode_message(NULL, p);
   }
   void encode_payload(uint64_t features) {
     ::encode(session_mon_tid, payload);
     ::encode(dest, payload);
-    encode_message(msg, features, payload);
+    if (msg)
+      encode_message(msg, features, payload);
   }
 
   const char *get_type_name() const { return "route"; }
