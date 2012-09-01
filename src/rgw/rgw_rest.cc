@@ -300,17 +300,17 @@ int RGWInitMultipart_REST::get_params()
   return ret;
 }
 
-static int read_all_chunked_input(req_state *s, char **pdata, int *plen)
+static int read_all_chunked_input(req_state *s, char **pdata, int64_t *plen)
 {
 #define READ_CHUNK 4096
 #define MAX_READ_CHUNK (128 * 1024)
-  int need_to_read = READ_CHUNK;
-  int total = need_to_read;
+  int64_t need_to_read = READ_CHUNK;
+  int64_t total = need_to_read;
   char *data = (char *)malloc(total + 1);
   if (!data)
     return -ENOMEM;
 
-  int read_len = 0, len = 0;
+  int64_t read_len = 0, len = 0;
   do {
     CGI_GetStr(s, data + len, need_to_read, read_len);
 

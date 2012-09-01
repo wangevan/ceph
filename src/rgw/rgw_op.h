@@ -484,7 +484,7 @@ protected:
   string upload_id;
   string etag;
   char *data;
-  int len;
+  int64_t len;
 
 public:
   RGWCompleteMultipart() {}
