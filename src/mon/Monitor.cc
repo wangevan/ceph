@@ -1919,6 +1919,25 @@ bool Monitor::_ms_dispatch(Message *m)
   return ret;
 }
 
+void Monitor::run_redispatch_queue()
+{
+  list<Message*> ls;
+  ls.swap(redispatch_queue);
+  if (ls.empty()) {
+    dout(20) << "run_redispatch_queue nothing to do" << dendl;
+    return;
+  }
+  dout(10) << "run_redispatch_queue " << ls << dendl;
+  while (!ls.empty()) {
+    Message *m = ls.front();
+    ls.pop_front();
+    dout(10) << "run_redispatch_queue " << m << dendl;
+    _ms_dispatch(m);
+  }
+  dout(10) << "run_redispatch_queue done" << dendl;
+}
+
+
 void Monitor::handle_subscribe(MMonSubscribe *m)
 {
   dout(10) << "handle_subscribe " << *m << dendl;

@@ -134,6 +134,20 @@ private:
 public:
   MonitorStore *store;
 
+  // -- requeueing --
+private:
+  list<Message*> redispatch_queue;
+
+  void run_redispatch_queue();
+
+public:
+  void requeue(list<Message*>& ls) {
+    redispatch_queue.splice(redispatch_queue.end(), ls);
+  }
+  void requeue(Message *m) {
+    redispatch_queue.push_back(m);
+  }
+
   // -- monitor state --
 private:
   enum {
@@ -382,7 +396,7 @@ public:
   public:
     C_RetryMessage(Monitor *m, Message *ms) : mon(m), msg(ms) {}
     void finish(int r) {
-      mon->_ms_dispatch(msg);
+      mon->requeue(msg);
     }
   };
 
@@ -391,7 +405,9 @@ public:
   bool _ms_dispatch(Message *m);
   bool ms_dispatch(Message *m) {
     lock.Lock();
+    run_redispatch_queue();
     bool ret = _ms_dispatch(m);
+    run_redispatch_queue();
     lock.Unlock();
     return ret;
   }
