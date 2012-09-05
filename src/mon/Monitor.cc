@@ -1806,7 +1806,7 @@ void Monitor::_sync_status(ostream& ss)
 	int s = -1;
 	if (sync_entities_states.count(e))
 	  s = sync_entities_states[e];
-	jf.dump_stream("sync_state") << get_sync_state_name(e);
+	jf.dump_stream("sync_state") << get_sync_state_name(s);
       }
     }
     jf.close_section();
@@ -1824,7 +1824,7 @@ void Monitor::_sync_status(ostream& ss)
       int s = -1;
       if (sync_entities_states.count(e))
 	  s = sync_entities_states[e];
-      jf.dump_stream("sync_state") << get_sync_state_name(e);
+      jf.dump_stream("sync_state") << get_sync_state_name(s);
 
       jf.close_section();
     }
