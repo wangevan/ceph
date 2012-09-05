@@ -1168,6 +1168,7 @@ void Monitor::handle_sync_start_reply(MMonSync *m)
   
   if (m->flags & MMonSync::FLAG_RETRY) {
     dout(10) << __func__ << " retrying sync at a later time" << dendl;
+    sync_role = SYNC_ROLE_NONE;
     sync_state = SYNC_STATE_NONE;
     sync_leader->set_timeout(new C_SyncStartRetry(this, sync_leader->entity),
 			     g_conf->mon_sync_backoff_timeout);
