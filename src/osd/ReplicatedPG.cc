@@ -3350,7 +3350,6 @@ int ReplicatedPG::prepare_transaction(OpContext *ctx)
 	     << " in " << snapoid << dendl;
     ctx->log.push_back(pg_log_entry_t(pg_log_entry_t::MODIFY, snapoid, ctx->at_version, old_version,
 				  osd_reqid_t(), ctx->mtime));
-    ctx->at_version.version++;
 
     ctx->snapset_obc = get_object_context(snapoid, ctx->new_obs.oi.oloc, true);
     ctx->snapset_obc->obs.exists = true;
@@ -3364,6 +3363,7 @@ int ReplicatedPG::prepare_transaction(OpContext *ctx)
     ctx->op_t.touch(coll, snapoid);
     ctx->op_t.setattr(coll, snapoid, OI_ATTR, bv);
     ctx->op_t.setattr(coll, snapoid, SS_ATTR, bss);
+    ctx->at_version.version++;
   }
 
   // finish and log the op.
